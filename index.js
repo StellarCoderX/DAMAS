@@ -407,14 +407,21 @@ io.on("connection", (socket) => {
       selectedBoard = JSON.parse(JSON.stringify(standardOpening));
     }
 
+    // --- LÓGICA DE SORTEIO DE CORES ---
+    const isPlayer1White = Math.random() < 0.5;
+    const whitePlayer = isPlayer1White ? player1 : player2;
+    const blackPlayer = isPlayer1White ? player2 : player1;
+    // ------------------------------------
+
     room.game = {
-      players: { white: player1.socketId, black: player2.socketId },
-      users: { white: player1.user.email, black: player2.user.email },
+      players: { white: whitePlayer.socketId, black: blackPlayer.socketId },
+      users: { white: whitePlayer.user.email, black: blackPlayer.user.email },
       boardState: selectedBoard,
-      currentPlayer: "b",
+      currentPlayer: "b", // As brancas SEMPRE começam, mas quem joga de brancas foi sorteado
       isFirstMove: true,
       movesSinceCapture: 0,
     };
+
     const gameState = { ...room.game, roomCode };
     io.to(roomCode).emit("gameStart", gameState);
   });
@@ -518,24 +525,25 @@ io.on("connection", (socket) => {
   });
 });
 
+// SUBSTITUA TODA A SUA FUNÇÃO processEndOfGame PELA VERSÃO ABAIXO
+
 async function processEndOfGame(winnerColor, loserColor, room, reason) {
   if (!room) return;
   clearInterval(room.timerInterval);
 
-  // Se for empate
+  // Se for empate (de um jogo ou da partida inteira)
   if (!winnerColor || !loserColor) {
+    // Se for o primeiro jogo de uma partida Tablita, prepara o segundo jogo.
     if (room.isTablita && room.match.currentGame === 1) {
-      // Empate no primeiro jogo não conta ponto
       room.match.currentGame = 2;
       const scoreArray = [
         room.match.score[room.match.player1.email],
         room.match.score[room.match.player2.email],
       ];
       io.to(room.roomCode).emit("nextGameStarting", { score: scoreArray });
-
       setTimeout(() => startNextTablitaGame(room), 10000);
     } else {
-      // Empate de partida (devolve a aposta)
+      // Se for um empate final (jogo único ou partida Tablita), devolve a aposta.
       try {
         await User.findOneAndUpdate(
           { email: room.players[0].user.email },
@@ -549,72 +557,90 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
       } catch (err) {
         console.error("Erro ao processar empate:", err);
       } finally {
-        delete gameRooms[room.roomCode];
+        delete gameRooms[room.roomCode]; // Garante que a sala seja sempre eliminada
       }
     }
-    return;
+    return; // Sai da função
   }
 
+  // Se houver um vencedor para o jogo atual
   const winnerData = room.players.find(
     (p) =>
       p.socketId === room.game.players[winnerColor === "b" ? "white" : "black"]
   );
 
-  // Se for modo Tablita e for o primeiro jogo
+  // Se for o primeiro jogo de uma partida Tablita, atualiza o placar e prepara o segundo jogo.
   if (room.isTablita && room.match.currentGame === 1) {
     room.match.score[winnerData.user.email]++;
     room.match.currentGame = 2;
-
     const scoreArray = [
       room.match.score[room.match.player1.email],
       room.match.score[room.match.player2.email],
     ];
     io.to(room.roomCode).emit("nextGameStarting", { score: scoreArray });
-
     setTimeout(() => startNextTablitaGame(room), 10000);
-  } else {
-    // Lógica para fim de partida
-    let finalWinnerData;
-    const prize = room.bet * 2;
+    return; // <-- CORREÇÃO 1: Adicionado o 'return' que faltava para evitar o 'fall-through'.
+  }
 
-    if (room.isTablita) {
-      room.match.score[winnerData.user.email]++;
-      const p1Score = room.match.score[room.match.player1.email];
-      const p2Score = room.match.score[room.match.player2.email];
+  // Se for o fim de uma partida (jogo único ou segundo jogo da Tablita)
+  let finalWinnerData;
+  const prize = room.bet * 2;
 
-      if (p1Score > p2Score) {
-        finalWinnerData = room.match.player1;
-      } else if (p2Score > p1Score) {
-        finalWinnerData = room.match.player2;
-      } else {
-        // Empate na partida
-        return processEndOfGame(null, null, room, "Partida empatada.");
-      }
+  if (room.isTablita) {
+    // Atualiza o placar final da partida Tablita
+    room.match.score[winnerData.user.email]++;
+    const p1Score = room.match.score[room.match.player1.email];
+    const p2Score = room.match.score[room.match.player2.email];
+
+    if (p1Score > p2Score) {
+      finalWinnerData = room.match.player1;
+    } else if (p2Score > p1Score) {
+      finalWinnerData = room.match.player2;
     } else {
-      finalWinnerData = winnerData;
+      // CORREÇÃO 2: Lógica de empate da PARTIDA Tablita simplificada
+      try {
+        await User.findOneAndUpdate(
+          { email: room.players[0].user.email },
+          { $inc: { saldo: room.bet } }
+        );
+        await User.findOneAndUpdate(
+          { email: room.players[1].user.email },
+          { $inc: { saldo: room.bet } }
+        );
+        io.to(room.roomCode).emit("gameDraw", {
+          reason: "A partida terminou empatada.",
+        });
+      } catch (err) {
+        console.error("Erro ao processar empate da partida:", err);
+      } finally {
+        delete gameRooms[room.roomCode];
+      }
+      return; // Sai da função
     }
+  } else {
+    // Se for um jogo Clássico, o vencedor do jogo é o vencedor final.
+    finalWinnerData = winnerData;
+  }
 
-    const finalWinnerColor =
-      room.game.users.white === finalWinnerData.email ? "b" : "p";
-
-    try {
-      const updatedWinner = await User.findOneAndUpdate(
-        { email: finalWinnerData.email },
-        { $inc: { saldo: prize } },
-        { new: true }
-      );
-      io.to(room.roomCode).emit("gameOver", {
-        winner: finalWinnerColor,
-        reason,
-      });
-      const winnerSocket = io.sockets.sockets.get(finalWinnerData.socketId);
-      if (winnerSocket)
-        winnerSocket.emit("updateSaldo", { newSaldo: updatedWinner.saldo });
-    } catch (err) {
-      console.error("Erro ao finalizar o jogo:", err);
-    } finally {
-      delete gameRooms[room.roomCode];
+  // Paga o prémio ao vencedor final
+  try {
+    const updatedWinner = await User.findOneAndUpdate(
+      { email: finalWinnerData.email },
+      { $inc: { saldo: prize } },
+      { new: true }
+    );
+    io.to(room.roomCode).emit("gameOver", {
+      winner: room.game.users.white === finalWinnerData.email ? "b" : "p",
+      reason,
+    });
+    const winnerSocket = io.sockets.sockets.get(finalWinnerData.socketId);
+    if (winnerSocket) {
+      winnerSocket.emit("updateSaldo", { newSaldo: updatedWinner.saldo });
     }
+  } catch (err) {
+    console.error("Erro ao finalizar o jogo e pagar o prémio:", err);
+  } finally {
+    delete gameRooms[room.roomCode]; // Garante que a sala seja sempre eliminada
   }
 }
 
