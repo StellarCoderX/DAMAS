@@ -16,11 +16,10 @@ jobs:
       # 1. Faz o checkout do teu código do repositório
       - uses: actions/checkout@v3
 
-      # 2. Usa a "Action" oficial e correta do Fly.io para fazer o deploy
-      - uses: fly-apps/fly-deploy@master
+      # 2. Usa a "Action" oficial do Fly.io com uma versão específica
+      - uses: fly-apps/fly-deploy@v0.2.1
         with:
           # Informa o nome da tua app no Fly.io
-          # Se o nome da app no Fly.io for diferente de "jogo-damas", altera aqui
           appName: "jogo-damas"
         env:
           # Passa o token de API que guardaste nos secrets do GitHub
