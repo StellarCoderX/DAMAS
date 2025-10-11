@@ -622,19 +622,28 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
     finalWinnerData = winnerData;
   }
 
+  // Bloco novo e corrigido
   // Paga o prémio ao vencedor final
   try {
+    // CORREÇÃO: Acede ao email através de 'finalWinnerData.user.email'
+    const winnerEmail = room.isTablita
+      ? finalWinnerData.email
+      : finalWinnerData.user.email;
+
     const updatedWinner = await User.findOneAndUpdate(
-      { email: finalWinnerData.email },
+      { email: winnerEmail }, // <-- AGORA CORRETO
       { $inc: { saldo: prize } },
       { new: true }
     );
+
     io.to(room.roomCode).emit("gameOver", {
-      winner: room.game.users.white === finalWinnerData.email ? "b" : "p",
+      winner: room.game.users.white === winnerEmail ? "b" : "p", // <-- AGORA CORRETO
       reason,
     });
+
     const winnerSocket = io.sockets.sockets.get(finalWinnerData.socketId);
-    if (winnerSocket) {
+    if (winnerSocket && updatedWinner) {
+      // Adicionada verificação
       winnerSocket.emit("updateSaldo", { newSaldo: updatedWinner.saldo });
     }
   } catch (err) {
