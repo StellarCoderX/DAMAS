@@ -128,6 +128,26 @@ app.delete("/api/admin/user/:email", async (req, res) => {
   }
 });
 
+app.post("/api/admin/reset-all-saldos", async (req, res) => {
+  try {
+    const { secret } = req.body;
+
+    // 1. Verifica se a chave secreta é válida
+    if (secret !== process.env.ADMIN_SECRET_KEY) {
+      return res.status(403).json({ message: "Acesso não autorizado." });
+    }
+
+    // 2. Atualiza TODOS os utilizadores, definindo o saldo para 0
+    await User.updateMany({}, { $set: { saldo: 0 } });
+
+    // 3. Envia uma resposta de sucesso
+    res.status(200).json({ message: "O saldo de todos os utilizadores foi zerado com sucesso!" });
+
+  } catch (error) {
+    res.status(500).json({ message: "Ocorreu um erro no servidor ao zerar os saldos." });
+  }
+});
+
 // =========================================================
 // ================== LÓGICA MULTIPLAYER ===================
 // =========================================================
