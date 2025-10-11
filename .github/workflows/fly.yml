@@ -1,7 +1,5 @@
-# Nome do fluxo de trabalho
 name: Fly Deploy
 
-# Executa no push para a branch 'main'
 on:
   push:
     branches:
@@ -11,17 +9,9 @@ jobs:
   deploy:
     name: Deploy app
     runs-on: ubuntu-latest
-
     steps:
-      # 1. Faz o checkout do teu código do repositório
       - uses: actions/checkout@v3
-
-      # 2. Usa a action oficial para instalar a ferramenta 'flyctl'
       - uses: superfly/fly-cli-action@1.3.0
-
-      # 3. Executa o comando de deploy diretamente
-      # O '--remote-only' garante que ele construa a aplicação no servidor do Fly.io
       - run: flyctl deploy --remote-only
         env:
-          # Passa o token de API que está nos secrets do GitHub
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
