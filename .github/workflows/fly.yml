@@ -3,32 +3,25 @@ name: Fly Deploy
 
 # Define quando este fluxo de trabalho deve ser executado
 on:
-  # Executa sempre que fizeres um "push" para a branch "main" ou "master"
   push:
     branches:
-      - main
-      - master
+      - main # ou 'master', dependendo do nome da tua branch principal
 
 jobs:
   deploy:
     name: Deploy app
-    runs-on: ubuntu-latest # Usa uma máquina virtual Linux para executar os passos
+    runs-on: ubuntu-latest
 
     steps:
       # 1. Faz o checkout do teu código do repositório
       - uses: actions/checkout@v3
 
-      # 2. Configura a ferramenta flyctl
-      - uses: superfly/fly-pr-review-apps@v1
-        # Configura a versão do flyctl para garantir consistência
+      # 2. Usa a "Action" oficial e correta do Fly.io para fazer o deploy
+      - uses: fly-apps/fly-deploy@master
         with:
-          flyctl-version: '0.2.71' # Podes atualizar para uma versão mais recente se necessário
-
-      # 3. Executa o comando de deploy
-      - run: fly deploy --remote-only
+          # Informa o nome da tua app no Fly.io
+          # Se o nome da app no Fly.io for diferente de "jogo-damas", altera aqui
+          appName: "jogo-damas"
         env:
-          # Usa o token que guardaste nos secrets do GitHub
+          # Passa o token de API que guardaste nos secrets do GitHub
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          # Injeta os outros secrets na aplicação durante o deploy
-          MONGO_URI: ${{ secrets.MONGO_URI }}
-          ADMIN_SECRET_KEY: ${{ secrets.ADMIN_SECRET_KEY }}
