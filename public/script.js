@@ -32,6 +32,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const acceptBetBtn = document.getElementById("accept-bet-btn");
   const declineBetBtn = document.getElementById("decline-bet-btn");
   const logoutBtn = document.getElementById("logout-btn");
+  // ELEMENTOS DE ÁUDIO
+  const moveSound = document.getElementById("move-sound");
+  const captureSound = document.getElementById("capture-sound");
+
 
   const socket = io({ autoConnect: false });
   let currentUser = null;
@@ -161,11 +165,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   createRoomBtn.addEventListener("click", () => {
     const bet = parseInt(betAmountInput.value, 10);
-    // LÊ O VALOR DA CHECKBOX
     const isTablita = document.getElementById("tablita-mode-checkbox").checked;
     
     if (bet > 0 && currentUser) {
-      // ENVIA O VALOR DA CHECKBOX PARA O SERVIDOR
       socket.emit("createRoom", { bet, user: currentUser, isTablita });
       lobbyErrorMessage.textContent = "";
     } else if (!currentUser) {
@@ -271,6 +273,20 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function updateGame(gameState) {
+    // Lógica para contar peças e tocar som
+    const oldPieceCount = boardState.flat().filter(p => p !== 0).length;
+    const newPieceCount = gameState.boardState.flat().filter(p => p !== 0).length;
+
+    if (newPieceCount > 0 && oldPieceCount > 0) { // Não toca som no início do jogo
+        if (newPieceCount < oldPieceCount) {
+            captureSound.currentTime = 0;
+            captureSound.play();
+        } else {
+            moveSound.currentTime = 0;
+            moveSound.play();
+        }
+    }
+    
     boardState = gameState.boardState;
     renderPieces();
     turnDisplay.textContent =
@@ -285,7 +301,6 @@ document.addEventListener("DOMContentLoaded", () => {
     lobbyErrorMessage.textContent = data.message;
   });
   
-  // ATUALIZA O "confirmBet" PARA MOSTRAR O MODO DE JOGO
   socket.on("confirmBet", (data) => {
     confirmBetAmount.textContent = data.bet;
     tempRoomCode = data.roomCode;
@@ -311,14 +326,21 @@ document.addEventListener("DOMContentLoaded", () => {
     if (myColor === 'p') {
       boardElement.classList.add('board-flipped');
     }
-    updateGame(gameState);
+    // Não toca som no gameStart, apenas atualiza o estado inicial
+    boardState = gameState.boardState;
+    renderPieces();
+    turnDisplay.textContent =
+      gameState.currentPlayer === "b" ? "Brancas" : "Pretas";
   });
   socket.on("timerUpdate", (data) => {
     timerDisplay.textContent = data.timeLeft;
   });
+
+  // O "gameStateUpdate" agora é a ÚNICA fonte de atualização e som
   socket.on("gameStateUpdate", (gameState) => {
     updateGame(gameState);
   });
+
   socket.on("invalidMove", (data) => {
     alert(data.message);
   });
