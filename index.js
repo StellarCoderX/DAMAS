@@ -165,17 +165,22 @@ const standardOpening = [
   ["b", 0, "b", 0, "b", 0, "b", 0],
 ];
 
+// Em index.js, substitua a constante tablitaOpenings pela versão abaixo:
+
 const tablitaOpenings = [
+  // Configuração 1 (CORRIGIDA)
   [
     [0, "p", 0, "p", 0, "p", 0, "p"],
     ["p", 0, "p", 0, "p", 0, "p", 0],
     [0, 0, 0, "p", 0, "p", 0, "p"],
     ["p", 0, 0, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0, 0, 0, "b"],
-    [0, "b", 0, "b", 0, "b", 0, 0],
+    // A linha abaixo foi corrigida. As peças foram movidas para casas escuras.
+    ["b", 0, "b", 0, "b", 0, 0, 0],
     [0, "b", 0, "b", 0, "b", 0, "b"],
     ["b", 0, "b", 0, "b", 0, "b", 0],
   ],
+  // Configuração 2 (Esta já parecia correta, mas mantemos para consistência)
   [
     [0, "p", 0, "p", 0, "p", 0, "p"],
     ["p", 0, "p", 0, "p", 0, "p", 0],
