@@ -472,24 +472,49 @@ body {
 }
 
 /* --- ESTILO PARA O BOTÃO DE RETIRADA --- */
-
 #withdraw-btn {
   display: inline-block;
   padding: 10px 25px;
-  margin-bottom: 20px; /* Adiciona um espaço abaixo do botão */
+  margin-bottom: 10px; /* Margem padronizada */
   border-radius: 5px;
   background-color: #2ecc71; /* Cor verde para simbolizar dinheiro/saque */
   color: white;
   font-weight: bold;
   font-size: 1em;
-  text-decoration: none; /* Remove o sublinhado padrão do link */
+  text-decoration: none;
   text-align: center;
   cursor: pointer;
   transition: background-color 0.3s ease;
+  box-sizing: border-box;
+  width: calc(100% - 6rem); /* Largura consistente */
+  max-width: 350px;
 }
 
 #withdraw-btn:hover {
-  background-color: #27ae60; /* Um verde um pouco mais escuro ao passar o rato */
+  background-color: #27ae60;
+}
+
+/* 2. ADICIONE ESTE NOVO BLOCO DE CÓDIGO PARA O BOTÃO DE ADICIONAR SALDO */
+#add-balance-btn {
+  display: inline-block;
+  padding: 10px 25px;
+  margin-bottom: 10px; /* Mesma margem para consistência */
+  border-radius: 5px;
+  background-color: #3498db; /* Cor azul para diferenciar a ação */
+  color: white;
+  font-weight: bold;
+  font-size: 1em;
+  text-decoration: none;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  box-sizing: border-box;
+  width: calc(100% - 6rem); /* Largura consistente */
+  max-width: 350px;
+}
+
+#add-balance-btn:hover {
+  background-color: #2980b9; /* Azul mais escuro para o efeito 'hover' */
 }
 
 /* --- ESTILOS PARA O OVERLAY DE CONEXÃO PERDIDA --- */
@@ -722,4 +747,30 @@ body {
 
 #resign-btn:hover {
   background-color: #a93226; /* Um tom de vermelho mais escuro */
+}
+
+/* --- ESTILO PARA O BOTÃO DO GRUPO WHATSAPP --- */
+
+#whatsapp-group-btn {
+  display: inline-block;
+  padding: 10px 25px;
+  margin-bottom: 10px; /* Espaçamento abaixo do botão */
+  border-radius: 5px;
+  background-color: #25d366; /* Cor oficial do WhatsApp */
+  color: white;
+  font-weight: bold;
+  font-size: 1em;
+  text-decoration: none; /* Remove o sublinhado padrão do link */
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  box-sizing: border-box; /* Garante que o padding não afete a largura total */
+  width: calc(
+    100% - 6rem
+  ); /* Faz o botão ter uma largura consistente com os containers */
+  max-width: 350px; /* Limite máximo para a largura */
+}
+
+#whatsapp-group-btn:hover {
+  background-color: #128c7e; /* Cor mais escura do WhatsApp para o efeito 'hover' */
 }
