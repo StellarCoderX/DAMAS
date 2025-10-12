@@ -677,17 +677,18 @@ function startNextTablitaGame(room) {
 // ========= FUNÇÕES DE LÓGICA DO JOGO (ATUALIZADAS) =========
 // =========================================================
 
-// NOVA FUNÇÃO para encontrar a melhor sequência de captura
+// SUBSTITUA A SUA FUNÇÃO 'findBestCaptureMoves' POR ESTA
 function findBestCaptureMoves(playerColor, game) {
   let bestMoves = [];
   let maxCaptures = 0;
-  let hasDamaCapture = false;
 
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
       const piece = game.boardState[r][c];
+      // Verifica se a peça pertence ao jogador atual
       if (piece !== 0 && piece.toLowerCase() === playerColor) {
         const isDama = piece === piece.toUpperCase();
+        // Encontra todas as sequências de captura para esta peça
         const sequences = findCaptureSequencesForPiece(
           r,
           c,
@@ -697,24 +698,15 @@ function findBestCaptureMoves(playerColor, game) {
 
         sequences.forEach((seq) => {
           const numCaptures = seq.length - 1;
-          if (isDama && !hasDamaCapture) {
-            hasDamaCapture = true;
-            maxCaptures = numCaptures;
-            bestMoves = [seq];
-          } else if (isDama && hasDamaCapture && numCaptures > maxCaptures) {
-            maxCaptures = numCaptures;
-            bestMoves = [seq];
-          } else if (isDama && hasDamaCapture && numCaptures === maxCaptures) {
-            bestMoves.push(seq);
-          } else if (!isDama && !hasDamaCapture && numCaptures > maxCaptures) {
-            maxCaptures = numCaptures;
-            bestMoves = [seq];
-          } else if (
-            !isDama &&
-            !hasDamaCapture &&
-            numCaptures === maxCaptures
-          ) {
-            bestMoves.push(seq);
+
+          // Se esta sequência captura mais peças que a melhor encontrada até agora
+          if (numCaptures > maxCaptures) {
+            maxCaptures = numCaptures; // Atualiza o número máximo de capturas
+            bestMoves = [seq]; // Começa uma nova lista com esta sequência
+          }
+          // Se esta sequência captura o mesmo número de peças que a melhor atual
+          else if (numCaptures === maxCaptures && maxCaptures > 0) {
+            bestMoves.push(seq); // Adiciona à lista de melhores opções
           }
         });
       }
@@ -834,7 +826,7 @@ function findCaptureSequencesForPiece(row, col, board, isDama) {
   return sequences;
 }
 
-// FUNÇÃO ATUALIZADA
+// SUBSTITUA A SUA FUNÇÃO 'isMoveValid' POR ESTA
 function isMoveValid(from, to, playerColor, game, ignoreMajorityRule = false) {
   const board = game.boardState;
   if (!board || !board[from.row] || !board[to.row])
@@ -844,7 +836,7 @@ function isMoveValid(from, to, playerColor, game, ignoreMajorityRule = false) {
   if (piece === 0 || piece.toLowerCase() !== playerColor || destination !== 0)
     return { valid: false, reason: "Seleção ou destino inválido." };
 
-  // Lógica da Lei da Maioria e Qualidade
+  // Lógica da Lei da Maioria
   if (!ignoreMajorityRule) {
     const bestCaptures = findBestCaptureMoves(playerColor, game);
     if (bestCaptures.length > 0) {
@@ -856,10 +848,11 @@ function isMoveValid(from, to, playerColor, game, ignoreMajorityRule = false) {
           seq[1].col === to.col
       );
       if (!isMoveInBestCaptures) {
+        // Mensagem de erro atualizada para ser mais clara
         return {
           valid: false,
           reason:
-            "Existe uma captura obrigatória com mais peças ou com uma Dama.",
+            "Lei da Maioria: Você é obrigado a fazer a captura com o maior número de peças.",
         };
       }
     }
