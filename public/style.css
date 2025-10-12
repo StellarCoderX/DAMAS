@@ -128,77 +128,105 @@ body {
   border-radius: 10px;
 }
 
-/* Estilos do Tabuleiro */
+/* --- ESTILOS DO TABULEIRO (VERSÃO REALISTA) --- */
 #board {
   display: grid;
   grid-template-columns: repeat(8, min(60px, 10vw));
   grid-template-rows: repeat(8, min(60px, 10vw));
-  border: 5px solid #5a3d2b;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-}
 
-.square {
-  width: min(60px, 10vw);
-  height: min(60px, 10vw);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  /* Borda que simula uma moldura de madeira escura */
+  border: 12px solid #382d21;
+  border-radius: 5px; /* Cantos ligeiramente arredondados */
+
+  /* Sombra externa para dar profundidade e uma sombra interna para o efeito de rebaixo */
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4), inset 0 0 15px rgba(0, 0, 0, 0.6);
 }
 
 .light {
-  background-color: #f0d9b5;
-}
-.dark {
-  background-color: #b58863;
+  background-color: #f0d9b5; /* Cor de base caso a imagem não carregue */
+  /* Textura de madeira clara */
+  background-image: url("/textures/light-wood.jpg");
+  background-size: cover;
+  /* Adicionado para centralizar a peça filha */
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
-/* Estilos das Peças (Geral) */
+.dark {
+  background-color: #b58863; /* Cor de base */
+  /* Textura de madeira escura */
+  background-image: url("/textures/dark-wood.jpg");
+  background-size: cover;
+  /* Adicionado para centralizar a peça filha */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* --- ESTILOS DAS PEÇAS (VERSÃO REALISTA) --- */
 .piece {
   width: 85%;
   height: 85%;
   border-radius: 50%;
   cursor: pointer;
-  transition: transform 0.2s ease;
-  /* Sombra externa para a peça "saltar" do tabuleiro */
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
-  position: relative; /* Necessário para os anéis concêntricos */
-}
 
-/* Efeito de anéis concêntricos usando pseudo-elementos */
-.piece::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 70%;
-  height: 70%;
-  border-radius: 50%;
-  border: 2px solid rgba(0, 0, 0, 0.1);
+  /* Sombra projetada no tabuleiro para dar efeito de elevação */
+  box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.4);
+
+  /* Transição suave para o efeito de hover */
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  /* Adicionado para centralizar o conteúdo interno (a coroa da dama) */
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .piece:hover {
-  transform: scale(1.1);
+  transform: scale(1.1) translateY(-3px); /* Levanta um pouco a peça */
+  box-shadow: 8px 8px 15px rgba(0, 0, 0, 0.3);
 }
 
-/* Peças Brancas */
+/* --- ESTILOS DAS PEÇAS (VERSÃO FINAL COM RANHURAS) --- */
+
+/* Peças Brancas (com anéis concêntricos) */
 .white-piece {
-  /* Gradiente radial para simular luz a bater no centro da peça */
-  background: radial-gradient(circle at 50% 40%, #ffffff, #f0f0f0 60%, #dcdcdc);
-  /* Borda subtil para dar definição */
-  border: 1px solid #c0c0c0;
+  background: radial-gradient(circle at 50% 50%, #f9f9f9, #ccc);
+  /* Camadas de sombra para criar o efeito de ranhuras */
+  box-shadow: 
+    /* Sombra projetada da peça no tabuleiro */ 3px 3px 6px
+      rgba(0, 0, 0, 0.4),
+    /* Sombras internas para os anéis */ inset 0px 2px 2px 0px
+      rgba(255, 255, 255, 0.9),
+    /* Brilho superior */ inset 0px -2px 2px 0px rgba(0, 0, 0, 0.2),
+    /* Sombra inferior */ /* 1º anel (a ranhura mais externa) */ inset 0 0 0 4px
+      #d1d1d1,
+    /* 2º anel (a borda interna clara) */ inset 0 0 0 6px #ffffff,
+    /* 3º anel (a ranhura mais interna) */ inset 0 0 0 10px #d1d1d1;
 }
 
-.white-piece::before {
-  border: 2px solid rgba(0, 0, 0, 0.15);
-}
-
-/* Peças Pretas */
+/* Peças Pretas (com anéis concêntricos) */
 .black-piece {
-  /* Gradiente radial para as peças escuras, com o brilho no topo */
-  background: radial-gradient(circle at 50% 40%, #5a5a5a, #2a2a2a 70%, #1a1a1a);
-  /* Borda subtil para as peças escuras */
-  border: 1px solid #111;
+  background: radial-gradient(circle at 50% 50%, #5a5a5a, #1a1a1a);
+  /* Camadas de sombra para criar o efeito de ranhuras */
+  box-shadow: 
+    /* Sombra projetada da peça no tabuleiro */ 3px 3px 6px
+      rgba(0, 0, 0, 0.6),
+    /* Sombras internas para os anéis */ inset 0px 2px 2px 0px
+      rgba(255, 255, 255, 0.2),
+    /* Brilho superior */ inset 0px -2px 2px 0px rgba(0, 0, 0, 0.4),
+    /* Sombra inferior */ /* 1º anel (a ranhura mais externa) */ inset 0 0 0 4px
+      #1a1a1a,
+    /* 2º anel (a borda interna com brilho) */ inset 0 0 0 6px #5a5a5a,
+    /* 3º anel (a ranhura mais interna) */ inset 0 0 0 10px #1a1a1a;
+}
+
+/* A seleção agora usa um brilho em vez de uma borda azul */
+.selected {
+  box-shadow: 0 0 15px 5px #00aaff,
+    /* Brilho azul de seleção */ 8px 8px 15px rgba(0, 0, 0, 0.3);
+  transform: scale(1.1) translateY(-3px);
 }
 
 /* Dama (King) e Seleção */
@@ -206,17 +234,12 @@ body {
   content: "♕";
   font-size: 24px;
   font-weight: bold;
-  position: absolute;
   color: gold;
   text-shadow: 0 0 3px black;
 }
 .black-piece.king::after {
   color: #f0f0f0;
   text-shadow: 0 0 3px gold;
-}
-.selected {
-  outline: 3px solid #00aaff;
-  transform: scale(1.1);
 }
 
 /* Classes Utilitárias e Telas de Fim de Jogo */
@@ -614,7 +637,14 @@ body {
   }
 }
 
-/* --- ESTILO PARA DESTAQUE DE JOGADAS VÁLIDAS --- */
+/* --- ESTILO PARA DESTAQUE DE JOGADAS VÁLIDAS (CORRIGIDO) --- */
+
+.valid-move-highlight {
+  /* Estas 3 linhas forçam o alinhamento do ponto verde ao centro */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
 /* Cria um "pseudo-elemento" dentro da casa válida para ser o nosso ponto animado */
 .valid-move-highlight::after {
