@@ -1,4 +1,4 @@
-// src/socketHandlers.js (CORREÇÃO DE CONTAGEM DE LANCES)
+// src/socketHandlers.js (CORREÇÃO: FORMATO DE DADOS DO LOBBY)
 
 const User = require("../models/User");
 const {
@@ -17,8 +17,10 @@ const { startTimer, resetTimer, processEndOfGame } = require("./gameManager");
 
 const gameRooms = {};
 
+// ### CORREÇÃO AQUI: Retorna objeto { waiting, active } ###
 function getLobbyInfo() {
-  return Object.values(gameRooms)
+  // 1. Salas de Espera (1 jogador)
+  const waitingRooms = Object.values(gameRooms)
     .filter((room) => room.players.length === 1 && !room.isGameConcluded)
     .map((room) => ({
       roomCode: room.roomCode,
@@ -28,6 +30,21 @@ function getLobbyInfo() {
       creatorEmail: room.players[0].user.email,
       timerDuration: room.timerDuration,
     }));
+
+  // 2. Jogos em Andamento (2 jogadores) - Para Espectadores
+  const activeRooms = Object.values(gameRooms)
+    .filter((room) => room.players.length === 2 && !room.isGameConcluded)
+    .map((room) => ({
+      roomCode: room.roomCode,
+      bet: room.bet,
+      gameMode: room.gameMode,
+      timeControl: room.timeControl,
+      player1Email: room.players[0].user.email,
+      player2Email: room.players[1].user.email,
+      timerDuration: room.timerDuration,
+    }));
+
+  return { waiting: waitingRooms, active: activeRooms };
 }
 
 function initializeSocket(io) {
@@ -332,17 +349,13 @@ function initializeSocket(io) {
         const pieceBeforeMove = game.boardState[from.row][from.col];
         const isPieceDama = pieceBeforeMove.toUpperCase() === pieceBeforeMove;
 
-        // --- LÓGICA CORRIGIDA AQUI ---
-        // Se a peça movida NÃO for Dama (ou seja, é uma Pedra), zeramos AMBOS os contadores.
-        // Se for captura, zeramos AMBOS.
         if (!isPieceDama || isValid.isCapture) {
           game.damaMovesWithoutCaptureOrPawnMove = 0;
-          game.movesSinceCapture = 0; // ### CORREÇÃO: Zera contagem geral ao mover pedra
+          game.movesSinceCapture = 0;
         } else if (isPieceDama && !isValid.isCapture) {
           game.damaMovesWithoutCaptureOrPawnMove++;
-          game.movesSinceCapture++; // Só incrementa se for Dama e não capturou
+          game.movesSinceCapture++;
         }
-        // -----------------------------
 
         game.boardState[to.row][to.col] = game.boardState[from.row][from.col];
         game.boardState[from.row][from.col] = 0;
@@ -350,7 +363,6 @@ function initializeSocket(io) {
         let wasPromotion = false;
         if (isValid.isCapture) {
           game.boardState[isValid.capturedPos.row][isValid.capturedPos.col] = 0;
-          // Contadores já foram zerados acima
           const nextCaptures = getAllPossibleCapturesForPiece(
             to.row,
             to.col,
@@ -372,11 +384,10 @@ function initializeSocket(io) {
 
         if (wasPromotion) {
           canCaptureAgain = false;
-          game.movesSinceCapture = 0; // Promoção também zera a contagem (regra comum)
+          game.movesSinceCapture = 0;
           game.damaMovesWithoutCaptureOrPawnMove = 0;
         }
 
-        // ### CONTADOR DE PEÇAS PARA REGRAS DE EMPATE ###
         let whitePieces = 0;
         let whiteDames = 0;
         let blackPieces = 0;
@@ -409,7 +420,6 @@ function initializeSocket(io) {
           whiteDames === 1;
 
         if (gameRoom.gameMode !== "international") {
-          // 40 meias-jogadas = 20 lances completos
           if (game.damaMovesWithoutCaptureOrPawnMove >= 40)
             return processEndOfGame(
               null,
@@ -473,7 +483,6 @@ function initializeSocket(io) {
       }
     });
 
-    // ... (restante do código igual) ...
     socket.on("getValidMoves", (data) => {
       const { row, col, roomCode } = data;
       const room = gameRooms[roomCode];

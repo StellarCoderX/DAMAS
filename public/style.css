@@ -11,7 +11,7 @@ body {
   font-family: "Poppins", sans-serif;
   background-image: url("background-login.jpg");
   background-size: cover;
-  background-position: center top; /* ALTERADO AQUI */
+  background-position: center top;
   background-attachment: fixed;
   display: flex;
   justify-content: center;
@@ -22,22 +22,13 @@ body {
 
 /* Container de Autenticação com Efeito de Vidro */
 #auth-container {
-  /* Fundo semitransparent escuro */
   background: rgba(20, 20, 30, 0.65);
-
-  /* O efeito de desfoque que cria a aparência de "vidro fosco" */
   backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px); /* Para compatibilidade com Safari */
-
+  -webkit-backdrop-filter: blur(12px);
   padding: 2.5rem 3rem;
   border-radius: 20px;
-
-  /* Borda subtil para realçar o efeito de vidro */
   border: 1px solid rgba(255, 255, 255, 0.1);
-
-  /* Sombra para dar profundidade */
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-
   width: 100%;
   max-width: 400px;
   text-align: center;
@@ -73,11 +64,11 @@ body {
 }
 
 #auth-container input:focus {
-  border-color: #e85d40; /* Cor de destaque inspirada na imagem */
+  border-color: #e85d40;
 }
 
 #auth-container button {
-  background-color: #e85d40; /* Cor de destaque laranja/vermelho */
+  background-color: #e85d40;
   color: white;
   padding: 14px;
   border: none;
@@ -90,7 +81,7 @@ body {
 
 #auth-container button:hover {
   background-color: #d74c30;
-  transform: translateY(-2px); /* Efeito de elevação subtil */
+  transform: translateY(-2px);
 }
 
 #auth-container p {
@@ -116,115 +107,77 @@ body {
 }
 
 /* --- ESTILOS ANTIGOS (LOBBY E JOGO) --- */
-/* Mantemos os estilos do lobby e do jogo para quando o login for bem-sucedido */
 
 /* Container do Jogo */
 #game-container {
   display: flex;
   flex-direction: column;
   align-items: center;
-  background-color: #333; /* Fundo escuro para o jogo */
+  background-color: #333;
   padding: 2rem;
   border-radius: 10px;
 }
 
-/* --- ESTILOS DO TABULEIRO (VERSÃO REALISTA) --- */
+/* --- ESTILOS DO TABULEIRO --- */
 #board {
   display: grid;
-  /* REMOVIDO: grid-template-columns e grid-template-rows 
-    Estes valores agora são definidos dinamicamente em script.js 
-    para suportar 8x8 e 10x10.
-  */
-
-  /* Borda que simula uma moldura de madeira escura */
   border: 12px solid #382d21;
-  border-radius: 5px; /* Cantos ligeiramente arredondados */
-
-  /* Sombra externa para dar profundidade e uma sombra interna para o efeito de rebaixo */
+  border-radius: 5px;
   box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4), inset 0 0 15px rgba(0, 0, 0, 0.6);
 }
 
 .light {
-  background-color: #f0d9b5; /* Cor de base caso a imagem não carregue */
-  /* Textura de madeira clara */
+  background-color: #f0d9b5;
   background-image: url("/textures/light-wood.jpg");
   background-size: cover;
-  /* Adicionado para centralizar a peça filha */
   display: flex;
   justify-content: center;
   align-items: center;
 }
 
 .dark {
-  background-color: #b58863; /* Cor de base */
-  /* Textura de madeira escura */
+  background-color: #b58863;
   background-image: url("/textures/dark-wood.jpg");
   background-size: cover;
-  /* Adicionado para centralizar a peça filha */
   display: flex;
   justify-content: center;
   align-items: center;
 }
 
-/* --- ESTILOS DAS PEÇAS (VERSÃO REALISTA) --- */
+/* --- ESTILOS DAS PEÇAS --- */
 .piece {
   width: 85%;
   height: 85%;
   border-radius: 50%;
   cursor: pointer;
-
-  /* Sombra projetada no tabuleiro para dar efeito de elevação */
   box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.4);
-
-  /* Transição suave para o efeito de hover */
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-
-  /* Adicionado para centralizar o conteúdo interno (a coroa da dama) */
   display: flex;
   justify-content: center;
   align-items: center;
 }
 
 .piece:hover {
-  transform: scale(1.1) translateY(-3px); /* Levanta um pouco a peça */
+  transform: scale(1.1) translateY(-3px);
   box-shadow: 8px 8px 15px rgba(0, 0, 0, 0.3);
 }
 
-/* --- ESTILOS DAS PEÇAS (VERSÃO FINAL COM RANHURAS) --- */
-
-/* Peças Brancas (com anéis concêntricos) */
 .white-piece {
   background: radial-gradient(circle at 50% 50%, #f9f9f9, #ccc);
-  /* Camadas de sombra para criar o efeito de ranhuras */
-  box-shadow: 
-    /* Sombra projetada da peça no tabuleiro */ 3px 3px 6px
-      rgba(0, 0, 0, 0.4),
-    /* Sombras internas para os anéis */ inset 0px 2px 2px 0px
-      rgba(255, 255, 255, 0.9),
-    /* Brilho superior */ inset 0px -2px 2px 0px rgba(0, 0, 0, 0.2),
-    /* Sombra inferior */ /* 1º anel (a ranhura mais externa) */ inset 0 0 0 4px
-      #d1d1d1,
-    /* 2º anel (a borda interna clara) */ inset 0 0 0 6px #ffffff,
-    /* 3º anel (a ranhura mais interna) */ inset 0 0 0 10px #d1d1d1;
+  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.4),
+    inset 0px 2px 2px 0px rgba(255, 255, 255, 0.9),
+    inset 0px -2px 2px 0px rgba(0, 0, 0, 0.2), inset 0 0 0 4px #d1d1d1,
+    inset 0 0 0 6px #ffffff, inset 0 0 0 10px #d1d1d1;
 }
 
-/* Peças Pretas (com anéis concêntricos) */
 .black-piece {
   background: radial-gradient(circle at 50% 50%, #5a5a5a, #1a1a1a);
-  /* Camadas de sombra para criar o efeito de ranhuras */
-  box-shadow: 
-    /* Sombra projetada da peça no tabuleiro */ 3px 3px 6px
-      rgba(0, 0, 0, 0.6),
-    /* Sombras internas para os anéis */ inset 0px 2px 2px 0px
-      rgba(255, 255, 255, 0.2),
-    /* Brilho superior */ inset 0px -2px 2px 0px rgba(0, 0, 0, 0.4),
-    /* Sombra inferior */ /* 1º anel (a ranhura mais externa) */ inset 0 0 0 4px
-      #1a1a1a,
-    /* 2º anel (a borda interna com brilho) */ inset 0 0 0 6px #5a5a5a,
-    /* 3º anel (a ranhura mais interna) */ inset 0 0 0 10px #1a1a1a;
+  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.6),
+    inset 0px 2px 2px 0px rgba(255, 255, 255, 0.2),
+    inset 0px -2px 2px 0px rgba(0, 0, 0, 0.4), inset 0 0 0 4px #1a1a1a,
+    inset 0 0 0 6px #5a5a5a, inset 0 0 0 10px #1a1a1a;
 }
 
-/* Dama (King) e Seleção */
 .king::after {
   content: "♕";
   font-size: 24px;
@@ -334,7 +287,7 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 15px;
-  background: rgba(30, 40, 50, 0.85); /* Fundo escuro para o lobby */
+  background: rgba(30, 40, 50, 0.85);
   backdrop-filter: blur(10px);
   padding: 2rem 3rem;
   border-radius: 8px;
@@ -450,51 +403,30 @@ body {
   color: white;
 }
 
-/* --- AJUSTE FINO PARA ECRÃS MUITO LARGOS --- */
-
-/* Esta regra só será aplicada se a largura do ecrã for de 1600 pixels ou mais */
 @media (min-width: 1600px) {
   body {
-    /* Em vez de 'cover', forçamos a imagem a ter 100% da largura do ecrã.
-       A altura será ajustada automaticamente para manter a proporção. */
     background-size: 100% auto;
   }
 }
 
-/* --- ESTILOS PARA VIRAR O TABULEIRO PARA O JOGADOR 'PRETAS' --- */
-
-/* Roda o tabuleiro inteiro quando ele tem a classe .board-flipped */
 #board.board-flipped {
   transform: rotate(180deg);
-  transition: transform 0.5s ease-in-out; /* Adiciona uma animação suave */
+  transition: transform 0.5s ease-in-out;
 }
-
-/* As peças dentro do tabuleiro virado também rodam.
-  Precisamos de as 'desvirar' para que não fiquem de cabeça para baixo.
-*/
 #board.board-flipped .piece {
   transform: rotate(180deg);
 }
-
-/* Ajusta os efeitos de hover e seleção para funcionarem corretamente
-  com a peça já rotacionada.
-*/
 #board.board-flipped .piece:hover {
   transform: rotate(180deg) scale(1.1);
 }
-
-/* O símbolo da Dama (coroa) também precisa ser 'desvirado' */
 #board.board-flipped .king::after {
   transform: rotate(180deg);
-  display: inline-block; /* Garante que a transformação seja aplicada corretamente */
+  display: inline-block;
 }
 
-/* --- ESTILO PARA O BOTÃO DE RETIRADA --- */
 #withdraw-btn {
   margin-bottom: 0;
 }
-
-/* --- ESTILOS PARA O OVERLAY DE CONEXÃO PERDIDA --- */
 
 #connection-lost-overlay {
   position: fixed;
@@ -522,7 +454,6 @@ body {
   color: #e67e22;
 }
 
-/* Animação de 'loading' */
 .loader {
   border: 4px solid #f3f3f3;
   border-radius: 50%;
@@ -542,123 +473,85 @@ body {
   }
 }
 
-/* --- ESTILOS RESPONSIVOS PARA MOBILE --- */
-
-/* Estas regras aplicam-se a ecrãs com 768px de largura ou menos (tablets e telemóveis) */
 @media (max-width: 768px) {
   body {
-    /* Remove o padding extra para dar mais espaço aos elementos */
     padding: 1rem;
-    /* Garante que os containers não fiquem colados às bordas */
     display: flex;
     align-items: center;
     justify-content: center;
   }
-
-  /* --- Ajustes na Tela de Login --- */
   #auth-container {
-    padding: 2rem 1.5rem; /* Reduz o padding lateral */
+    padding: 2rem 1.5rem;
     width: 100%;
-    max-width: 90vw; /* Usa a largura da tela como referência */
+    max-width: 90vw;
   }
-
   #auth-container h2 {
-    font-size: 1.8rem; /* Diminui um pouco o título */
+    font-size: 1.8rem;
   }
-
-  /* --- Ajustes no Lobby --- */
   #lobby-container {
-    padding: 1.5rem; /* Reduz o padding */
+    padding: 1.5rem;
     width: 100%;
-    max-width: 95vw; /* Usa quase toda a largura da tela */
-    gap: 15px; /* Reduz o espaçamento entre as seções */
+    max-width: 95vw;
+    gap: 15px;
   }
-
   .lobby-section {
-    padding: 10px; /* Menos padding interno nas seções */
+    padding: 10px;
     display: flex;
-    flex-direction: column; /* Coloca os elementos um em baixo do outro */
-    align-items: stretch; /* Estica os elementos para ocupar a largura total */
-    gap: 10px; /* Espaçamento entre o input e o botão */
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
   }
-
   #lobby-container input {
-    margin-right: 0; /* Remove a margem que não é mais necessária */
-    width: 100%; /* Faz os inputs ocuparem toda a largura */
+    margin-right: 0;
+    width: 100%;
   }
-
   #lobby-container input[type="number"] {
-    width: 100%; /* Também ocupa toda a largura */
+    width: 100%;
   }
-
-  /* --- Ajustes na Tela de Jogo --- */
   #game-container {
-    padding: 1rem; /* Reduz o padding para maximizar o tabuleiro */
+    padding: 1rem;
     width: 100%;
     max-width: 100vw;
   }
-
-  /* Ajusta o tamanho do tabuleiro e das casas para caber na tela */
   #board {
-    /* REMOVIDO: grid-template-columns e grid-template-rows 
-      Estes valores agora são definidos dinamicamente em script.js 
-    */
-    border-width: 3px; /* Borda um pouco mais fina */
+    border-width: 3px;
   }
-
-  /* REMOVIDO: .square { width/height } 
-    O tamanho agora é controlado pelo 'grid-template-columns/rows' em script.js
-  */
-
-  /* Garante que a coroa da Dama (king) se ajuste ao novo tamanho */
   .king::after {
     font-size: 18px;
   }
-
   #game-info {
-    flex-direction: column; /* Coloca "Vez de:" e "Tempo" um em baixo do outro */
+    flex-direction: column;
     align-items: center;
-    gap: 5px; /* Adiciona um pequeno espaço entre eles */
-    margin-top: 15px; /* Mais espaço acima da info do jogo */
+    gap: 5px;
+    margin-top: 15px;
   }
-
-  /* Ajustes nas telas de fim de jogo (Vitória/Derrota) */
   #winner-screen,
   #loser-screen,
   #draw-screen {
-    padding: 20px 30px; /* Menos padding */
-    width: 90vw; /* Ocupa 90% da tela */
+    padding: 20px 30px;
+    width: 90vw;
   }
-
   #winner-screen h1,
   #loser-screen h1 {
-    font-size: 1.8em; /* Título menor */
+    font-size: 1.8em;
   }
 }
 
-/* --- ESTILO PARA DESTAQUE DE JOGADAS VÁLIDAS (CORRIGIDO) --- */
-
 .valid-move-highlight {
-  /* Estas 3 linhas forçam o alinhamento do ponto verde ao centro */
   display: flex;
   align-items: center;
   justify-content: center;
 }
-
-/* Cria um "pseudo-elemento" dentro da casa válida para ser o nosso ponto animado */
 .valid-move-highlight::after {
   content: "";
   display: block;
-  width: 30%; /* Tamanho do ponto */
+  width: 30%;
   height: 30%;
-  background-color: rgba(46, 204, 113, 0.7); /* Cor verde semi-transparente */
+  background-color: rgba(46, 204, 113, 0.7);
   border-radius: 50%;
   box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
-  /* Aplica a animação 'pulse' */
   animation: pulse 1.5s infinite ease-in-out;
 }
-
-/* Define a animação 'pulse' */
 @keyframes pulse {
   0% {
     transform: scale(0.9);
@@ -674,10 +567,6 @@ body {
   }
 }
 
-/* Em public/style.css, adicione este código ao final */
-
-/* --- ESTILOS PARA O ECRÃ DE TRANSIÇÃO ENTRE PARTIDAS --- */
-
 #next-game-overlay {
   position: fixed;
   top: 0;
@@ -688,30 +577,26 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1003; /* Acima dos outros overlays */
+  z-index: 1003;
   color: white;
   text-align: center;
 }
-
 #next-game-box {
   background-color: #34495e;
   padding: 40px 50px;
   border-radius: 15px;
   border: 3px solid #f39c12;
 }
-
 #next-game-box h2 {
   margin-top: 0;
   color: #f39c12;
 }
 
-/* --- ESTILOS PARA OS BOTÕES DENTRO DO JOGO --- */
 #game-buttons {
   display: flex;
-  gap: 10px; /* Espaço entre os botões */
+  gap: 10px;
   margin-top: 15px;
 }
-
 #resign-btn,
 #draw-btn {
   padding: 10px 20px;
@@ -723,34 +608,27 @@ body {
   font-weight: bold;
   transition: background-color 0.3s;
 }
-
 #resign-btn {
-  background-color: #c0392b; /* Vermelho */
+  background-color: #c0392b;
 }
-
 #resign-btn:hover {
   background-color: #a93226;
 }
-
 #draw-btn {
-  background-color: #3498db; /* Azul */
+  background-color: #3498db;
 }
-
 #draw-btn:hover {
   background-color: #2980b9;
 }
-
 #draw-btn:disabled {
   background-color: #95a5a6;
   cursor: not-allowed;
 }
 
-/* --- ESTILO PARA O BOTÃO DO GRUPO WHATSAPP --- */
 #whatsapp-group-btn {
   margin-bottom: 0;
 }
 
-/* --- ESTILOS PARA O MODAL DE PEDIDO DE EMPATE --- */
 #draw-request-overlay {
   position: fixed;
   top: 0;
@@ -764,7 +642,6 @@ body {
   z-index: 1001;
   backdrop-filter: blur(5px);
 }
-
 #draw-request-box {
   background-color: white;
   color: #333;
@@ -773,37 +650,28 @@ body {
   text-align: center;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
 }
-
 #draw-request-box h3 {
   margin-top: 0;
 }
-
 #accept-draw-btn {
-  background-color: #2ecc71; /* verde */
+  background-color: #2ecc71;
   color: white;
 }
-
 #decline-draw-btn {
-  background-color: #e74c3c; /* vermelho */
+  background-color: #e74c3c;
   color: white;
 }
 
-/* --- NOVOS ESTILOS PARA TELA DE LOGIN COM REGRAS --- */
-
-/* Novo container principal para alinhar login e regras */
 #main-container {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 2rem; /* Espaçamento entre a caixa de login e as regras */
+  gap: 2rem;
   width: 100%;
-  max-width: 900px; /* Largura máxima para os dois containers juntos */
+  max-width: 900px;
   padding: 2rem;
 }
-
-/* Container para as Regras */
 #rules-container {
-  /* Efeito de vidro, igual ao #auth-container */
   background: rgba(20, 20, 30, 0.65);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -812,10 +680,9 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
   width: 100%;
-  max-width: 450px; /* Largura ajustada */
+  max-width: 450px;
   text-align: left;
 }
-
 #rules-container h2 {
   font-size: 2rem;
   font-weight: 700;
@@ -823,132 +690,88 @@ body {
   color: #ffffff;
   text-align: center;
 }
-
 #rules-container ul {
-  list-style-type: none; /* Remove os marcadores de lista padrão */
+  list-style-type: none;
   padding: 0;
 }
-
 #rules-container li {
   color: #f0f0f0;
   margin-bottom: 1rem;
   line-height: 1.5;
   font-size: 0.95rem;
-  border-left: 3px solid #e85d40; /* Adiciona uma barra lateral para estilo */
+  border-left: 3px solid #e85d40;
   padding-left: 1rem;
 }
 
-/* --- AJUSTES DE RESPONSIVIDADE PARA O NOVO LAYOUT --- */
 @media (max-width: 800px) {
   #main-container {
-    flex-direction: column; /* Coloca as regras abaixo do login em telas menores */
+    flex-direction: column;
     max-width: 90vw;
   }
-
   #auth-container,
   #rules-container {
-    max-width: 100%; /* Permite que ambos os containers usem a largura total */
+    max-width: 100%;
   }
 }
 
-/* ADICIONE ESTE CÓDIGO AO FINAL DO SEU ARQUIVO style.css */
-
-/* --- ESTILO PARA DESTAQUE DE PEÇA OBRIGATÓRIA --- */
 .piece.mandatory-capture {
-  /* Animação que fará a peça pulsar */
   animation: pulse-mandatory 2s infinite;
-
-  /* Sombra com brilho para destacar a peça */
-  box-shadow: 0 0 15px 5px #ff9800,
-    /* Brilho laranja forte */ 8px 8px 15px rgba(0, 0, 0, 0.3); /* Sombra projetada padrão */
+  box-shadow: 0 0 15px 5px #ff9800, 8px 8px 15px rgba(0, 0, 0, 0.3);
 }
-
-/* Definição da animação 'pulse-mandatory' */
 @keyframes pulse-mandatory {
   0% {
     transform: scale(1);
   }
   50% {
-    transform: scale(1.08); /* Aumenta ligeiramente o tamanho da peça */
+    transform: scale(1.08);
   }
   100% {
     transform: scale(1);
   }
 }
 
-/* #################################################################### */
-/* ### ESTILOS SUBSTITUÍDOS - DE TABELA PARA CARDS ### */
-/* #################################################################### */
-
 #open-rooms-list,
 #active-rooms-list {
-  max-height: 250px; /* Altura máxima para a lista */
-  overflow-y: auto; /* Adiciona scroll se a lista for muito grande */
-  padding-right: 5px; /* Espaço para a barra de scroll */
+  max-height: 250px;
+  overflow-y: auto;
+  padding-right: 5px;
   width: 100%;
 }
-
-/* Removemos os estilos de tabela */
-
-/* Novos estilos para a lista de cartões */
 .room-card-list {
-  list-style: none; /* Remove os marcadores de lista */
+  list-style: none;
   padding: 0;
   width: 100%;
 }
-
 .room-card {
-  background: rgba(0, 0, 0, 0.2); /* Fundo do cartão */
+  background: rgba(0, 0, 0, 0.2);
   border-radius: 8px;
   padding: 1rem;
   margin-bottom: 0.75rem;
   display: flex;
-  flex-direction: row; /* Lado a lado no computador */
+  flex-direction: row;
   justify-content: space-between;
   align-items: center;
   border: 1px solid rgba(255, 255, 255, 0.1);
   transition: background-color 0.2s;
 }
-
 .room-card:hover {
   background: rgba(0, 0, 0, 0.3);
 }
-
 .room-card-info p {
   margin: 0.25rem 0;
   font-size: 0.9em;
   color: #ecf0f1;
 }
-
 .room-card-info p strong {
-  color: #e85d40; /* Cor de destaque para os rótulos */
+  color: #e85d40;
   font-weight: 600;
   margin-right: 5px;
 }
-
 .room-card-action .join-room-btn {
   padding: 10px 20px;
   font-size: 1em;
   font-weight: bold;
-  background-color: #2ecc71; /* Cor verde para 'entrar' */
-  border: none;
-  border-radius: 4px;
-  color: white;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  width: auto; /* Deixa o botão ter o seu tamanho natural */
-}
-
-.room-card-action .join-room-btn:hover {
-  background-color: #27ae60;
-}
-
-/* Estilo do botão de Assistir */
-.room-card-action .watch-game-btn {
-  padding: 10px 20px;
-  font-size: 1em;
-  font-weight: bold;
-  background-color: #f39c12; /* Laranja */
+  background-color: #2ecc71;
   border: none;
   border-radius: 4px;
   color: white;
@@ -956,31 +779,40 @@ body {
   transition: background-color 0.2s;
   width: auto;
 }
-
+.room-card-action .join-room-btn:hover {
+  background-color: #27ae60;
+}
+.room-card-action .watch-game-btn {
+  padding: 10px 20px;
+  font-size: 1em;
+  font-weight: bold;
+  background-color: #f39c12;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  width: auto;
+}
 .room-card-action .watch-game-btn:hover {
   background-color: #d35400;
 }
 
-/* --- Responsividade para os cartões --- */
-/* Esta regra aplica-se a telemóveis (largura máxima de 500px) */
 @media (max-width: 500px) {
   .room-card {
-    flex-direction: column; /* Coloca o conteúdo em coluna */
-    align-items: stretch; /* Estica os itens para largura total */
+    flex-direction: column;
+    align-items: stretch;
   }
-
   .room-card-info {
-    margin-bottom: 1rem; /* Espaço entre a info e o botão */
-    text-align: center; /* Centraliza o texto da sala */
+    margin-bottom: 1rem;
+    text-align: center;
   }
-
   .room-card-action .join-room-btn,
   .room-card-action .watch-game-btn {
-    width: 100%; /* Faz o botão "Entrar" ocupar a largura toda */
+    width: 100%;
   }
 }
 
-/* Scrollbar personalizada para a lista (Mantido) */
 #open-rooms-list::-webkit-scrollbar,
 #active-rooms-list::-webkit-scrollbar {
   width: 8px;
@@ -1000,27 +832,30 @@ body {
   background: #d74c30;
 }
 
-/* #################################################################### */
-/* ### FIM DA MODIFICAÇÃO DOS ESTILOS DA LISTA ### */
-/* #################################################################### */
+/* --- ESTILOS PARA OS MODAIS PIX E SAQUE (UNIFICADO) --- */
 
-/* --- ESTILOS PARA O MODAL PIX --- */
-
-#pix-overlay {
+/* Fundo Escuro do Overlay */
+#pix-overlay,
+#withdraw-overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.8);
+  background-color: rgba(0, 0, 0, 0.85); /* Fundo um pouco mais escuro */
   backdrop-filter: blur(5px);
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: center; /* Centraliza verticalmente se couber */
   z-index: 1005;
+
+  /* Permite rolar se o conteúdo for maior que a tela (Correção Mobile) */
+  overflow-y: auto;
+  padding: 20px 0; /* Espaço em cima e embaixo */
 }
 
-#pix-box {
+/* Caixa de Conteúdo do Modal (Padronizada) */
+.modal-box {
   background: #34495e;
   padding: 2rem;
   border-radius: 15px;
@@ -1030,11 +865,17 @@ body {
   max-width: 400px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+
+  /* Garante que a caixa não ultrapasse a altura da tela e fique cortada */
+  max-height: 90vh; /* Máximo 90% da altura da tela */
+  overflow-y: auto; /* Adiciona scroll interno na caixa se necessário */
+  margin: auto; /* Ajuda na centralização com flexbox */
 }
 
-#pix-box h3 {
+.modal-box h3 {
   color: #e85d40;
   margin-bottom: 1.5rem;
+  font-size: 1.5rem;
 }
 
 .pix-info {
@@ -1048,40 +889,23 @@ body {
   margin: 0.5rem 0;
 }
 
-#copy-pix-key-btn {
-  background-color: #f39c12;
-  margin-bottom: 1rem;
+/* Estilização da Chave PIX longa para quebrar linha */
+.pix-info #pix-key {
+  display: inline-block;
+  padding: 8px;
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 5px;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.85em;
+  word-break: break-all; /* Essencial para chaves longas em mobile */
+  line-height: 1.5;
+  margin-top: 5px;
+  width: 100%; /* Ocupa largura disponível */
 }
 
-#copy-pix-key-btn:hover {
-  background-color: #d8890b;
-}
-
-#pix-box .instructions {
-  margin-bottom: 1.5rem;
-  font-size: 0.9em;
-  line-height: 1.4;
-}
-
-#pix-box .whatsapp-link {
-  background-color: #25d366;
-  margin-bottom: 1rem;
-}
-
-#pix-box .whatsapp-link:hover {
-  background-color: #128c7e;
-}
-
-#close-pix-overlay-btn {
-  background-color: #95a5a6;
-}
-
-#close-pix-overlay-btn:hover {
-  background-color: #7f8c8d;
-}
-
-#pix-box button,
-#pix-box a {
+/* Botões e Links dentro do Modal */
+.modal-box button,
+.modal-box a {
   padding: 12px 20px;
   border: none;
   border-radius: 8px;
@@ -1094,19 +918,49 @@ body {
   width: 100%;
   text-align: center;
   transition: background-color 0.3s;
+  margin-bottom: 10px; /* Espaçamento entre botões */
 }
 
-/* ### ADIÇÃO DE ESTILO PARA A CHAVE PIX LONGA ### */
-#pix-box .pix-info #pix-key {
-  display: inline-block; /* Permite que o fundo se ajuste */
-  padding: 8px;
-  background-color: rgba(0, 0, 0, 0.3); /* Fundo mais escuro para a chave */
-  border-radius: 5px;
-  font-family: "Courier New", Courier, monospace; /* Fonte monoespaçada para chaves */
-  font-size: 0.9em;
-  word-break: break-all; /* Força a quebra da string longa */
-  line-height: 1.5;
-  margin-top: 5px;
-  text-align: left; /* Alinha o texto da chave à esquerda */
+#copy-pix-key-btn {
+  background-color: #f39c12;
 }
-/* ### FIM DA ADIÇÃO ### */
+#copy-pix-key-btn:hover {
+  background-color: #d8890b;
+}
+
+.modal-box .whatsapp-link {
+  background-color: #25d366;
+}
+.modal-box .whatsapp-link:hover {
+  background-color: #128c7e;
+}
+
+/* Botão Fechar Padronizado */
+#close-pix-overlay-btn,
+#close-withdraw-overlay-btn {
+  background-color: #95a5a6;
+  margin-top: 15px;
+}
+#close-pix-overlay-btn:hover,
+#close-withdraw-overlay-btn:hover {
+  background-color: #7f8c8d;
+}
+
+/* Inputs do Modal de Saque (Estilo corrigido) */
+.modal-input {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 10px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  background-color: #f0f0f0;
+  color: #333;
+  font-size: 1rem;
+}
+
+.modal-box .instructions {
+  margin-bottom: 1.5rem;
+  font-size: 0.9em;
+  line-height: 1.4;
+  color: #bdc3c7;
+}

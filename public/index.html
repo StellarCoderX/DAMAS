@@ -79,13 +79,13 @@
       <input type="number" id="bet-amount-input" placeholder="Valor da Aposta" min="1" value="1" />
       <div id="game-mode-selection" style="
             margin-top: 10px;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 10px;
           ">
-        <label for="game-mode-select">Modo:</label>
+        <label for="game-mode-select">Modo de Jogo:</label>
         <select id="game-mode-select" style="
               padding: 5px;
               border-radius: 4px;
@@ -124,9 +124,14 @@
             justify-content: center;
             gap: 10px;
           ">
-        <label for="timer-select">Duração:</label>
+        <label for="timer-select">Tempo por Jogada:</label>
         <select id="timer-select" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc">
-          <!-- Opções populadas via JS -->
+          <option value="5">5 segundos</option>
+          <option value="10">10 segundos</option>
+          <option value="30">30 segundos</option>
+          <option value="40" selected>40 segundos</option>
+          <option value="60">1 minuto</option>
+          <option value="90">1 min e 30 seg</option>
         </select>
       </div>
 
@@ -143,7 +148,7 @@
     </div>
 
     <div class="lobby-section" id="open-rooms-section">
-      <h3>Salas de Espera (Entrar para Jogar)</h3>
+      <h3>Salas Abertas</h3>
       <div id="open-rooms-list">
         <p>A carregar salas...</p>
       </div>
@@ -169,7 +174,7 @@
     <div id="board"></div>
     <div id="game-info">
       <p>Vez de: <span id="turn">Brancas</span></p>
-      <p>Tempo: <span id="timer">--</span></p>
+      <p>Tempo restante: <span id="timer">40</span>s</p>
       <div id="game-buttons">
         <button id="resign-btn">Desistir</button>
         <button id="draw-btn">Empate</button>
@@ -263,12 +268,10 @@
   </div>
 
   <div id="pix-overlay" class="hidden">
-    <div id="pix-box">
+    <div class="modal-box"> <!-- USANDO A NOVA CLASSE -->
       <h3>Recarga Livre</h3>
       <p>Envie o valor que desejar!</p>
 
-      <!-- IMAGEM DO QR CODE -->
-      <!-- Certifique-se de que a imagem 'qrcode.png' está na pasta public/ -->
       <img src="qrcode.png" alt="QR Code PIX"
         style="width: 200px; height: auto; margin: 15px auto; display: block; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
 
@@ -277,8 +280,9 @@
         <p><strong>Tipo de Chave:</strong> Copia e Cola (QR Code)</p>
         <p>
           <strong>Chave:</strong>
-          <span id="pix-key"
-            style="word-break: break-all; font-size: 0.85em;">00020126580014br.gov.bcb.pix01362b3485a0-d28c-4d37-9b5d-b2efcac4cee65204000053039865802BR5919TIAGO SOUZA SANTANA6008Salvador6211050726f78796304D315</span>
+          <span
+            id="pix-key">00020126580014br.gov.bcb.pix01362b3485a0-d28c-4d37-9b5d-b2efcac4cee65204000053039865802BR5919TIAGO
+            SOUZA SANTANA6008Salvador6211050726f78796304D315</span>
         </p>
         <p><strong>Nome:</strong> Tiago Souza Santana</p>
       </div>
@@ -293,22 +297,25 @@
     </div>
   </div>
 
-  <!-- NOVO: OVERLAY DE SOLICITAÇÃO DE SAQUE -->
+  <!-- OVERLAY DE SAQUE ATUALIZADO COM DESIGN PADRONIZADO -->
   <div id="withdraw-overlay" class="hidden">
-    <div id="pix-box"> <!-- Reutilizando estilo do pix-box -->
+    <div class="modal-box"> <!-- USANDO A MESMA CLASSE .modal-box -->
       <h3>Solicitar Retirada</h3>
       <p>Preencha os dados para receber seu saldo via PIX.</p>
 
       <form id="withdraw-form" style="display: flex; flex-direction: column; gap: 10px;">
-        <input type="text" id="withdraw-pix-key" placeholder="Sua Chave PIX" required
-          style="padding: 10px; border-radius: 5px; border: 1px solid #ccc; width: 100%;">
-        <input type="number" id="withdraw-amount" placeholder="Valor (R$)" min="1" required
-          style="padding: 10px; border-radius: 5px; border: 1px solid #ccc; width: 100%;">
+        <!-- CLASSES .modal-input ADICIONADAS PARA SUBSTITUIR INLINE STYLES -->
+        <input type="text" id="withdraw-pix-key" placeholder="Sua Chave PIX" required class="modal-input">
+        <input type="number" id="withdraw-amount" placeholder="Valor (R$)" min="1" required class="modal-input">
+
+        <!-- Botão com estilo similar ao do PIX -->
         <button type="submit" style="background-color: #2ecc71; margin-top: 10px;">Solicitar</button>
       </form>
 
       <p id="withdraw-message" style="margin-top: 10px; font-weight: bold;"></p>
-      <button id="close-withdraw-overlay-btn" style="background-color: #95a5a6; margin-top: 10px;">Fechar</button>
+
+      <!-- Botão Fechar Padronizado -->
+      <button id="close-withdraw-overlay-btn">Fechar</button>
     </div>
   </div>
 
