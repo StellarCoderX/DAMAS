@@ -5,17 +5,35 @@ const bcrypt = require("bcryptjs");
 const UserSchema = new mongoose.Schema({
   email: {
     type: String,
-    required: true, // O email é obrigatório
-    unique: true, // Cada email deve ser único no banco
-    lowercase: true, // Salva o email sempre em minúsculas
+    required: true,
+    unique: true,
+    lowercase: true,
   },
   password: {
     type: String,
-    required: true, // A senha é obrigatória
+    required: true,
   },
   saldo: {
     type: Number,
-    default: 0, // O saldo inicial de todo novo usuário será 0
+    default: 0,
+  },
+  // --- NOVOS CAMPOS PARA INDICAÇÃO ---
+  referredBy: {
+    type: String, // Email de quem indicou este usuário
+    default: null,
+  },
+  hasDeposited: {
+    type: Boolean, // Marca se o usuário já fez o primeiro depósito
+    default: false,
+  },
+  firstDepositValue: {
+    // NOVO: Armazena o valor do primeiro depósito para histórico
+    type: Number,
+    default: 0,
+  },
+  referralEarnings: {
+    type: Number, // Quanto já ganhou com indicações
+    default: 0,
   },
 });
 

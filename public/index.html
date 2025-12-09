@@ -29,6 +29,8 @@
         <h2>Cadastro</h2>
         <input type="email" id="register-email" placeholder="Email" required />
         <input type="password" id="register-password" placeholder="Senha" required />
+        <!-- CAMPO NOVO: Código de Indicação -->
+        <input type="text" id="referral-code-input" placeholder="Código de Indicação (Opcional)" />
         <button type="submit">Cadastrar</button>
         <p>Já tem uma conta? <a href="#" id="show-login">Faça Login</a></p>
       </form>
@@ -63,6 +65,15 @@
 
   <div id="lobby-container" class="hidden">
     <h2 id="lobby-welcome-message"></h2>
+
+    <div style="margin-bottom: 15px; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px;">
+      <p style="font-size: 0.9em; margin-bottom: 5px;">💸 Ganhe R$ 1,00 se seu indicado depositar R$ 5,00!</p>
+      <button id="copy-referral-btn"
+        style="background-color: #9b59b6; font-size: 0.9em; padding: 8px; margin-bottom: 5px;">Copiar Link de
+        Indicação</button>
+      <button id="view-referrals-btn" style="background-color: #8e44ad; font-size: 0.9em; padding: 8px;">Minhas
+        Indicações</button>
+    </div>
 
     <button id="add-balance-btn">Adicionar Saldo</button>
 
@@ -288,7 +299,7 @@
       </div>
       <button id="copy-pix-key-btn">Copiar Chave</button>
       <p class="instructions">
-        Após o pagamento, envie o comprovative é seu email para o nosso WhatsApp para que
+        Após o pagamento, envie o comprovativo para o nosso WhatsApp para que
         o saldo seja adicionado à sua conta.
       </p>
       <a href="https://wa.me/5571920007957?text=Ol%C3%A1%21%20Estou%20enviando%20o%20comprovativo%20do%20meu%20pagamento%20PIX."
@@ -297,25 +308,35 @@
     </div>
   </div>
 
-  <!-- OVERLAY DE SAQUE ATUALIZADO COM DESIGN PADRONIZADO -->
+  <!-- OVERLAY DE SAQUE -->
   <div id="withdraw-overlay" class="hidden">
-    <div class="modal-box"> <!-- USANDO A MESMA CLASSE .modal-box -->
+    <div class="modal-box">
       <h3>Solicitar Retirada</h3>
       <p>Preencha os dados para receber seu saldo via PIX.</p>
 
       <form id="withdraw-form" style="display: flex; flex-direction: column; gap: 10px;">
-        <!-- CLASSES .modal-input ADICIONADAS PARA SUBSTITUIR INLINE STYLES -->
         <input type="text" id="withdraw-pix-key" placeholder="Sua Chave PIX" required class="modal-input">
         <input type="number" id="withdraw-amount" placeholder="Valor (R$)" min="1" required class="modal-input">
-
-        <!-- Botão com estilo similar ao do PIX -->
         <button type="submit" style="background-color: #2ecc71; margin-top: 10px;">Solicitar</button>
       </form>
 
       <p id="withdraw-message" style="margin-top: 10px; font-weight: bold;"></p>
-
-      <!-- Botão Fechar Padronizado -->
       <button id="close-withdraw-overlay-btn">Fechar</button>
+    </div>
+  </div>
+
+  <!-- NOVO: OVERLAY DE INDICAÇÕES -->
+  <div id="referrals-overlay" class="hidden">
+    <div class="modal-box" style="width: 95%; max-width: 500px;">
+      <h3>Minhas Indicações</h3>
+      <p>Pessoas que se cadastraram com seu link.</p>
+
+      <div id="referrals-list"
+        style="margin-top: 15px; max-height: 200px; overflow-y: auto; text-align: left; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 5px;">
+        <p>Carregando...</p>
+      </div>
+
+      <button id="close-referrals-overlay-btn" style="background-color: #95a5a6; margin-top: 15px;">Fechar</button>
     </div>
   </div>
 

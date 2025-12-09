@@ -1,5 +1,4 @@
 document.addEventListener("DOMContentLoaded", () => {
-  // --- Elementos do DOM ---
   const authContainer = document.getElementById("auth-admin-container");
   const adminContainer = document.getElementById("admin-container");
   const secretForm = document.getElementById("secret-form");
@@ -9,18 +8,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const usersTableBody = document.querySelector("#users-table tbody");
   const withdrawalsTableBody = document.querySelector(
     "#withdrawals-table tbody"
-  ); // NOVO
+  );
   const resetAllSaldosBtn = document.getElementById("reset-all-saldos-btn");
   const refreshWithdrawalsBtn = document.getElementById(
     "refresh-withdrawals-btn"
-  ); // NOVO
+  );
 
   let adminSecretKey = null;
   let allUsers = [];
 
-  // --- LÓGICA DE ADMIN EXISTENTE ---
-
-  // 1. Lida com o formulário de autenticação
   secretForm.addEventListener("submit", (e) => {
     e.preventDefault();
     adminSecretKey = secretKeyInput.value;
@@ -29,18 +25,17 @@ document.addEventListener("DOMContentLoaded", () => {
       authMessage.style.color = "red";
       return;
     }
-    loadData(); // Agora carrega tudo
+    loadData();
   });
 
   async function loadData() {
     await loadUsers();
-    await loadWithdrawals(); // Carrega saques também
+    await loadWithdrawals();
     authContainer.classList.add("hidden");
     adminContainer.classList.remove("hidden");
     initializeTestBoard();
   }
 
-  // 2. Carrega Utilizadores
   async function loadUsers() {
     try {
       const response = await fetch("/api/admin/users", {
@@ -66,7 +61,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // --- 2.5 Carrega Solicitações de Saque (NOVO) ---
   async function loadWithdrawals() {
     try {
       const response = await fetch("/api/admin/withdrawals", {
@@ -84,7 +78,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // --- Renderiza Tabela de Saques (NOVO) ---
   function renderWithdrawalsTable(withdrawals) {
     withdrawalsTableBody.innerHTML = "";
     if (withdrawals.length === 0) {
@@ -114,7 +107,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // --- Eventos da Tabela de Saques (NOVO) ---
   withdrawalsTableBody.addEventListener("click", async (e) => {
     const target = e.target;
     const id = target.dataset.id;
@@ -154,7 +146,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       const data = await response.json();
       alert(data.message);
-      loadData(); // Recarrega tudo para atualizar saldos também
+      loadData();
     } catch (error) {
       alert("Erro ao aprovar.");
     }
@@ -175,18 +167,30 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // 3. Função para renderizar (desenhar) a tabela de utilizadores
   function renderTable(users) {
     usersTableBody.innerHTML = "";
     users.forEach((user) => {
       const row = document.createElement("tr");
+      // Ícone para status de depósito
+      const depositStatus = user.hasDeposited ? "✅" : "⏳";
+      const referredBy = user.referredBy ? user.referredBy : "-";
+
       row.innerHTML = `
-        <td>${user.email}</td>
+        <td>
+            ${user.email}<br>
+            <small style="color:#aaa; font-size: 0.8em;">Indicado por: ${referredBy}</small>
+        </td>
         <td data-email="${user.email}">
           <span>${user.saldo.toFixed(2)}</span>
         </td>
+        <td style="text-align:center;">${depositStatus}</td>
         <td>
-          <button class="edit-btn" data-email="${user.email}">Editar</button>
+          <button class="add-saldo-btn" data-email="${
+            user.email
+          }" style="background-color: #2ecc71; margin-right: 5px;">+ Saldo</button>
+          <button class="edit-btn" data-email="${
+            user.email
+          }" style="margin-right: 5px;">Editar</button>
           <button class="delete-btn" data-email="${
             user.email
           }" style="background-color: #c0392b;">Excluir</button>
@@ -196,7 +200,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // 4. Lida com os cliques na tabela (para os botões "Editar" e "Excluir")
   usersTableBody.addEventListener("click", (e) => {
     const target = e.target;
     const email = target.dataset.email;
@@ -207,9 +210,40 @@ document.addEventListener("DOMContentLoaded", () => {
     if (target.classList.contains("delete-btn")) {
       handleDelete(email);
     }
+    // ### NOVO BOTÃO DE ADICIONAR SALDO ###
+    if (target.classList.contains("add-saldo-btn")) {
+      handleAddSaldo(email);
+    }
   });
 
-  // 5. Função para editar o saldo
+  // Função para ADICIONAR SALDO (e processar bônus)
+  async function handleAddSaldo(email) {
+    const amount = prompt(
+      `Quanto deseja adicionar para ${email}? (Se for o 1º depósito >= R$5, o indicador ganha bônus)`
+    );
+    if (amount && !isNaN(amount) && Number(amount) > 0) {
+      try {
+        const response = await fetch("/api/admin/add-saldo-bonus", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email,
+            amountToAdd: Number(amount),
+            secret: adminSecretKey,
+          }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message);
+
+        alert(data.message);
+        loadUsers();
+      } catch (error) {
+        alert(`Erro: ${error.message}`);
+      }
+    }
+  }
+
   function handleEdit(email) {
     const saldoCell = document.querySelector(`td[data-email="${email}"]`);
     const currentSaldo = saldoCell.querySelector("span").textContent;
@@ -228,7 +262,6 @@ document.addEventListener("DOMContentLoaded", () => {
     saldoCell.appendChild(saveBtn);
   }
 
-  // 6. Função para salvar o novo saldo no servidor
   async function saveNewSaldo(email, newSaldo) {
     try {
       const response = await fetch("/api/admin/update-saldo", {
@@ -252,28 +285,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // 7. Função para excluir utilizador
   async function handleDelete(email) {
-    if (
-      !confirm(
-        `Tem a certeza que deseja excluir o utilizador ${email}? Esta ação não pode ser desfeita.`
-      )
-    ) {
+    if (!confirm(`Tem a certeza que deseja excluir o utilizador ${email}?`))
       return;
-    }
-
     try {
       const response = await fetch(`/api/admin/user/${email}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ secret: adminSecretKey }),
       });
-
       const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || "Falha ao excluir utilizador.");
-      }
-
+      if (!response.ok) throw new Error(data.message);
       alert(data.message);
       loadUsers();
     } catch (error) {
@@ -281,7 +303,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // 8. Funcionalidade de pesquisa
   searchInput.addEventListener("input", (e) => {
     const searchTerm = e.target.value.toLowerCase();
     const filteredUsers = allUsers.filter((user) =>
@@ -290,26 +311,17 @@ document.addEventListener("DOMContentLoaded", () => {
     renderTable(filteredUsers);
   });
 
-  // 9. LÓGICA PARA O BOTÃO DE ZERAR SALDOS
   if (resetAllSaldosBtn) {
     resetAllSaldosBtn.addEventListener("click", async () => {
-      if (
-        !confirm(
-          "TEM A CERTEZA ABSOLUTA?\nEsta ação irá zerar o saldo de TODOS os utilizadores e não pode ser desfeita."
-        )
-      ) {
+      if (!confirm("TEM A CERTEZA ABSOLUTA? Isso zera TODOS os saldos!"))
         return;
-      }
       try {
         const response = await fetch("/api/admin/reset-all-saldos", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ secret: adminSecretKey }),
         });
-
         const data = await response.json();
-        if (!response.ok) throw new Error(data.message);
-
         alert(data.message);
         loadUsers();
       } catch (error) {
@@ -318,8 +330,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // --- ### NOVA LÓGICA DO TABULEIRO DE TESTE ### ---
-  // (Mantido igual, apenas para referência de que está aqui)
+  // --- LÓGICA DO TABULEIRO DE TESTE (Mantida) ---
   const standardOpening = [
     [0, "p", 0, "p", 0, "p", 0, "p"],
     ["p", 0, "p", 0, "p", 0, "p", 0],
@@ -354,7 +365,6 @@ document.addEventListener("DOMContentLoaded", () => {
       testGame.currentPlayer = testGame.currentPlayer === "b" ? "p" : "b";
       updateTestGameUI();
     });
-
     createBoard();
     startTestGame();
   }
@@ -466,7 +476,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const col = parseInt(square.dataset.col);
     const clickedPieceElement = e.target.closest(".piece");
 
-    // 1. TENTATIVA DE MOVIMENTO
     if (selectedPiece) {
       if (square.classList.contains("valid-move-highlight")) {
         const move = {
@@ -525,7 +534,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    // 2. TENTATIVA DE SELEÇÃO
     unselectPiece();
 
     if (clickedPieceElement) {
