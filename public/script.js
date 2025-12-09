@@ -79,6 +79,19 @@ document.addEventListener("DOMContentLoaded", () => {
   );
   const referralsList = document.getElementById("referrals-list");
 
+  // --- NOVOS ELEMENTOS DE HISTÓRICO ---
+  const viewHistoryBtn = document.getElementById("view-history-btn");
+  const historyOverlay = document.getElementById("history-overlay");
+  const closeHistoryOverlayBtn = document.getElementById(
+    "close-history-overlay-btn"
+  );
+  const historyList = document.getElementById("history-list");
+
+  // --- NOVOS ELEMENTOS DO HUD DE JOGADORES ---
+  const playersHud = document.getElementById("players-hud");
+  const whitePlayerNameSpan = document.getElementById("white-player-name");
+  const blackPlayerNameSpan = document.getElementById("black-player-name");
+
   const socket = io({ autoConnect: false });
   let currentUser = null;
   let myColor = null;
@@ -101,6 +114,99 @@ document.addEventListener("DOMContentLoaded", () => {
       registerForm.style.display = "block";
     }
   }
+
+  // --- LÓGICA DE HISTÓRICO ---
+  if (viewHistoryBtn) {
+    viewHistoryBtn.addEventListener("click", async () => {
+      historyOverlay.classList.remove("hidden");
+      historyList.innerHTML = "<p>Carregando histórico...</p>";
+
+      try {
+        const response = await fetch("/api/user/history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: currentUser.email }),
+        });
+        const historyData = await response.json();
+
+        historyList.innerHTML = "";
+        if (historyData.length === 0) {
+          historyList.innerHTML = "<p>Nenhuma partida encontrada.</p>";
+        } else {
+          const table = document.createElement("table");
+          table.className = "history-table";
+
+          table.innerHTML = `
+            <thead>
+              <tr>
+                  <th>Resultado</th>
+                  <th>Aposta</th>
+                  <th>Oponente</th>
+                  <th>Data</th>
+              </tr>
+            </thead>
+            <tbody>
+            </tbody>
+          `;
+
+          const tbody = table.querySelector("tbody");
+
+          historyData.forEach((match) => {
+            const tr = document.createElement("tr");
+            let resultClass = "";
+            let resultText = "";
+
+            if (!match.winner) {
+              resultClass = "history-draw";
+              resultText = "Empate";
+            } else if (match.winner === currentUser.email) {
+              resultClass = "history-win";
+              resultText = "Vitória";
+            } else {
+              resultClass = "history-loss";
+              resultText = "Derrota";
+            }
+
+            // Identificar oponente
+            const opponent =
+              match.player1 === currentUser.email
+                ? match.player2
+                : match.player1;
+            // Formatar data
+            const date = new Date(match.createdAt).toLocaleDateString("pt-BR", {
+              day: "2-digit",
+              month: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+
+            tr.innerHTML = `
+              <td class="${resultClass}" style="font-weight:bold;">${resultText}</td>
+              <td>R$ ${match.bet.toFixed(2)}</td>
+              <td style="font-size: 0.9em; color: #ccc;">${
+                opponent.split("@")[0]
+              }</td>
+              <td style="font-size: 0.8em; color: #aaa;">${date}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+
+          historyList.appendChild(table);
+        }
+      } catch (error) {
+        historyList.innerHTML =
+          "<p style='color: red;'>Erro ao carregar histórico.</p>";
+        console.error(error);
+      }
+    });
+  }
+
+  if (closeHistoryOverlayBtn) {
+    closeHistoryOverlayBtn.addEventListener("click", () => {
+      historyOverlay.classList.add("hidden");
+    });
+  }
+  // --- FIM DA LÓGICA DE HISTÓRICO ---
 
   if (copyReferralBtn) {
     copyReferralBtn.addEventListener("click", () => {
@@ -260,6 +366,7 @@ document.addEventListener("DOMContentLoaded", () => {
     spectatorLeaveBtn.classList.add("hidden");
     resignBtn.classList.remove("hidden");
     drawBtn.classList.remove("hidden");
+    playersHud.classList.add("hidden"); // Oculta nomes ao sair
 
     lobbyContainer.classList.remove("hidden");
     boardElement.classList.remove("board-flipped");
@@ -900,6 +1007,16 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${min}:${sec < 10 ? "0" : ""}${sec}`;
   }
 
+  // --- Função auxiliar para atualizar nomes dos jogadores ---
+  function updatePlayerNames(users) {
+    if (!users) return;
+    const whiteName = users.white ? users.white.split("@")[0] : "Brancas";
+    const blackName = users.black ? users.black.split("@")[0] : "Pretas";
+    whitePlayerNameSpan.textContent = whiteName;
+    blackPlayerNameSpan.textContent = blackName;
+    playersHud.classList.remove("hidden");
+  }
+
   // --- SOCKET.IO EVENT HANDLERS ---
 
   socket.on("connect", () => {
@@ -979,6 +1096,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     updateGame(data.gameState);
     highlightMandatoryPieces(data.gameState.mandatoryPieces);
+    updatePlayerNames(data.gameState.users);
 
     if (data.timeControl === "match") {
       const turnColor =
@@ -1035,6 +1153,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     updateGame(gameState);
     highlightMandatoryPieces(gameState.mandatoryPieces);
+    updatePlayerNames(gameState.users);
   });
 
   socket.on("timerUpdate", (data) => {
@@ -1081,6 +1200,7 @@ document.addEventListener("DOMContentLoaded", () => {
     createBoard();
 
     updateGame(data.gameState);
+    updatePlayerNames(data.gameState.users);
 
     if (data.timeLeft !== undefined) {
       timerDisplay.textContent = data.timeLeft + "s";

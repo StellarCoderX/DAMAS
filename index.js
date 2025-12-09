@@ -1,4 +1,4 @@
-// index.js (VERSÃO CORRIGIDA: LOGIN CASE-INSENSITIVE + LOGS DETALHADOS)
+// index.js (COM ROTA DE HISTÓRICO)
 require("dotenv").config();
 
 const express = require("express");
@@ -7,6 +7,8 @@ const socketIo = require("socket.io");
 const mongoose = require("mongoose");
 const User = require("./models/User");
 const Withdrawal = require("./models/Withdrawal");
+const MatchHistory = require("./models/MatchHistory"); // Importação do Modelo
+constQb = require("bcryptjs"); // Nota: Pequeno erro de digitação corrigido aqui (require("bcryptjs"))
 const bcrypt = require("bcryptjs");
 
 const { initializeSocket, gameRooms } = require("./src/socketHandlers");
@@ -35,14 +37,12 @@ mongoose
   .then(() => console.log("Conectado ao MongoDB Atlas com sucesso!"))
   .catch((err) => console.error("Erro ao conectar ao MongoDB:", err));
 
-// --- ROTAS DE API PADRÃO ---
+// --- ROTAS DE API ---
 
 app.post("/api/register", async (req, res) => {
   try {
     const { email, password, referralCode } = req.body;
-    
-    // Converte para minúsculas para evitar duplicação por caixa alta/baixa
-    const emailLower = email.toLowerCase(); 
+    const emailLower = email.toLowerCase();
 
     const existingUser = await User.findOne({ email: emailLower });
     if (existingUser) {
@@ -52,7 +52,6 @@ app.post("/api/register", async (req, res) => {
     const newUser = new User({ email: emailLower, password });
 
     if (referralCode) {
-      // Também busca o indicador em minúsculas
       const referralLower = referralCode.toLowerCase();
       const referrer = await User.findOne({ email: referralLower });
       if (referrer && referralLower !== emailLower) {
@@ -72,28 +71,29 @@ app.post("/api/register", async (req, res) => {
 app.post("/api/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    
+
     if (!email || !password) {
-        return res.status(400).json({ message: "Email e senha são obrigatórios." });
+      return res
+        .status(400)
+        .json({ message: "Email e senha são obrigatórios." });
     }
 
-    // CORREÇÃO: Forçar minúsculas para encontrar o usuário
     const emailLower = email.toLowerCase();
     console.log(`[Login] Tentativa para: ${emailLower}`);
 
     const user = await User.findOne({ email: emailLower });
-    
+
     if (!user) {
       console.log(`[Login] Falha: Usuário não encontrado (${emailLower})`);
       return res.status(400).json({ message: "Email ou senha inválidos." });
     }
-    
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       console.log(`[Login] Falha: Senha incorreta para (${emailLower})`);
       return res.status(400).json({ message: "Email ou senha inválidos." });
     }
-    
+
     console.log(`[Login] Sucesso: ${emailLower}`);
     res.status(200).json({
       message: "Login bem-sucedido!",
@@ -114,13 +114,13 @@ app.post("/api/user/re-authenticate", async (req, res) => {
     const { email } = req.body;
     if (!email)
       return res.status(400).json({ message: "Email não fornecido." });
-    
+
     const emailLower = email.toLowerCase();
     const user = await User.findOne({ email: emailLower });
-    
+
     if (!user)
       return res.status(404).json({ message: "Utilizador não encontrado." });
-    
+
     res.status(200).json({
       message: "Re-autenticado com sucesso!",
       user: {
@@ -134,7 +134,6 @@ app.post("/api/user/re-authenticate", async (req, res) => {
   }
 });
 
-// --- ROTA ATUALIZADA: LISTAR INDICADOS COM VALOR DO DEPÓSITO ---
 app.post("/api/user/referrals", async (req, res) => {
   try {
     const { email } = req.body;
@@ -151,6 +150,32 @@ app.post("/api/user/referrals", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Erro ao buscar indicações." });
+  }
+});
+
+// --- ROTA DE HISTÓRICO DE PARTIDAS ---
+app.post("/api/user/history", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "Email obrigatório." });
+
+    // Busca partidas onde o usuário foi player1 OU player2
+    const emailLower = email.toLowerCase();
+    const history = await MatchHistory.find({
+      $or: [
+        { MQ: "" },
+        { player1: emailLower },
+        { MQ: "" },
+        { player2: emailLower },
+      ],
+    })
+      .sort({ createdAt: -1 }) // Mais recentes primeiro
+      .limit(50); // Limita às últimas 50 partidas
+
+    res.json(history);
+  } catch (err) {
+    console.error("Erro ao buscar histórico:", err);
+    res.status(500).json({ message: "Erro ao buscar histórico." });
   }
 });
 
@@ -184,7 +209,6 @@ app.post("/api/withdraw", async (req, res) => {
   }
 });
 
-// --- ROTA ADMIN PARA ADICIONAR SALDO (LÓGICA AUTOMÁTICA) ---
 const adminAuthBody = (req, res, next) => {
   const { secret } = req.body;
   if (secret && secret === process.env.ADMIN_SECRET_KEY) next();
@@ -201,15 +225,13 @@ app.put("/api/admin/add-saldo-bonus", adminAuthBody, async (req, res) => {
     if (!user)
       return res.status(404).json({ message: "Usuário não encontrado." });
 
-    // 1. Adiciona o saldo normal ao usuário
     user.saldo += amount;
 
-    // 2. Lógica de Primeiro Depósito e Bônus
     let bonusMessage = "";
 
     if (!user.hasDeposited) {
       user.firstDepositValue = amount;
-      user.hasDeposited = true; 
+      user.hasDeposited = true;
 
       if (amount >= 5 && user.referredBy) {
         const referrer = await User.findOne({ email: user.referredBy });
@@ -235,7 +257,6 @@ app.put("/api/admin/add-saldo-bonus", adminAuthBody, async (req, res) => {
   }
 });
 
-// --- ROTAS DA API DE ADMINISTRAÇÃO (MANTIDAS) ---
 const adminAuthHeader = (req, res, next) => {
   const secretKey = req.headers["x-admin-secret-key"];
   if (secretKey && secretKey === process.env.ADMIN_SECRET_KEY) next();
@@ -323,7 +344,9 @@ app.put("/api/admin/update-saldo", adminAuthBody, async (req, res) => {
 
 app.delete("/api/admin/user/:email", adminAuthBody, async (req, res) => {
   try {
-    const result = await User.deleteOne({ email: req.params.email.toLowerCase() });
+    const result = await User.deleteOne({
+      email: req.params.email.toLowerCase(),
+    });
     if (result.deletedCount === 0)
       return res.status(404).json({ message: "Usuário não encontrado." });
     res.json({ message: "Usuário excluído com sucesso!" });

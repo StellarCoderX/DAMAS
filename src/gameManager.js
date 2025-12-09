@@ -1,5 +1,6 @@
-// src/gameManager.js (VERSÃO COM SUPORTE A DOIS TIPOS DE TEMPO)
+// src/gameManager.js (COM HISTÓRICO DE PARTIDAS)
 const User = require("../models/User");
+const MatchHistory = require("../models/MatchHistory"); // Importando o novo modelo
 const { findBestCaptureMoves } = require("./gameLogic");
 
 let io;
@@ -15,11 +16,8 @@ function startTimer(roomCode) {
   if (!room) return;
   if (room.timerInterval) clearInterval(room.timerInterval);
 
-  // Lógica difere baseada no tipo de controle de tempo
   if (room.timeControl === "match") {
     // --- MODO POR PARTIDA (BLITZ) ---
-    // Não reseta o timeLeft, usa os bancos de tempo whiteTime e blackTime
-    // Identifica quem está a jogar
     const currentPlayerColor = room.game.currentPlayer; // 'b' ou 'p'
 
     room.timerInterval = setInterval(() => {
@@ -38,8 +36,6 @@ function startTimer(roomCode) {
         if (room.blackTime <= 0) timeOver = true;
       }
 
-      // Envia atualização para os clientes
-      // Enviamos ambos os tempos para que o cliente possa exibir o correto
       io.to(roomCode).emit("timerUpdate", {
         whiteTime: room.whiteTime,
         blackTime: room.blackTime,
@@ -54,9 +50,6 @@ function startTimer(roomCode) {
     }, 1000);
   } else {
     // --- MODO POR JOGADA (PADRÃO) ---
-    // Reseta o tempo a cada chamada (feito no resetTimer, mas garantimos aqui o inicio)
-    // Se não foi resetado externamente, usamos o timeLeft atual
-
     io.to(roomCode).emit("timerUpdate", { timeLeft: room.timeLeft });
 
     room.timerInterval = setInterval(() => {
@@ -82,16 +75,41 @@ function resetTimer(roomCode) {
     clearInterval(room.timerInterval);
 
     if (room.timeControl === "match") {
-      // No modo partida, NÃO resetamos o valor do tempo.
-      // Apenas chamamos startTimer novamente, que vai pegar o currentPlayer
-      // (que deve ter mudado antes de chamar esta função) e decrementar o banco dele.
       startTimer(roomCode);
     } else {
-      // Modo por jogada: Reseta para o valor máximo
       room.timeLeft = room.timerDuration;
       io.to(roomCode).emit("timerUpdate", { timeLeft: room.timeLeft });
       startTimer(roomCode);
     }
+  }
+}
+
+// Função auxiliar para salvar histórico
+async function saveMatchHistory(room, winnerEmail, reason) {
+  try {
+    const p1Email = room.players[0].user.email;
+    const p2Email = room.players[1].user.email;
+
+    // Se for tablita, usamos o match.score para verificar quem é quem, mas a sala já tem os players
+    // Se não houver winnerEmail, é empate (null)
+
+    const history = new MatchHistory({
+      player1: p1Email,
+      player2: p2Email,
+      winner: winnerEmail || null, // null se empate
+      bet: room.bet,
+      gameMode: room.gameMode,
+      reason: reason,
+    });
+
+    await history.save();
+    console.log(
+      `[Histórico] Partida salva: ${p1Email} vs ${p2Email} | Vencedor: ${
+        winnerEmail || "Empate"
+      }`
+    );
+  } catch (err) {
+    console.error("Erro ao salvar histórico:", err);
   }
 }
 
@@ -104,8 +122,10 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
   room.drawOfferBy = null;
   io.to(room.roomCode).emit("drawOfferCancelled");
 
+  // --- MODO CLÁSSICO / INTERNACIONAL ---
   if (!room.isTablita) {
     if (!winnerColor) {
+      // EMPATE
       try {
         await User.findOneAndUpdate(
           { email: room.players[0].user.email },
@@ -116,10 +136,14 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
           { $inc: { saldo: room.bet } }
         );
         io.to(room.roomCode).emit("gameDraw", { reason });
+
+        // Salvar Histórico (Empate)
+        await saveMatchHistory(room, null, reason);
       } catch (err) {
         console.error("Erro ao processar empate clássico:", err);
       }
     } else {
+      // VITÓRIA
       const winnerSocketId =
         room.game.players[winnerColor === "b" ? "white" : "black"];
       const winnerData = room.players.find(
@@ -141,6 +165,9 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
           if (winnerSocket && updatedWinner) {
             winnerSocket.emit("updateSaldo", { newSaldo: updatedWinner.saldo });
           }
+
+          // Salvar Histórico (Vitória)
+          await saveMatchHistory(room, winnerData.user.email, reason);
         } catch (err) {
           console.error("Erro ao pagar prêmio clássico:", err);
         }
@@ -176,6 +203,7 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
     else if (p2Score > p1Score) finalWinnerData = room.match.player2;
 
     if (finalWinnerData) {
+      // VENCEDOR TABLITA FINAL
       try {
         const prize = room.bet * 2;
         const updatedWinner = await User.findOneAndUpdate(
@@ -185,18 +213,25 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
         );
         const winnerColorFinal =
           room.game.users.white === finalWinnerData.email ? "b" : "p";
+
+        const finalReason = `Fim da partida! Placar: ${p1Score} a ${p2Score}. ${reason}`;
+
         io.to(room.roomCode).emit("gameOver", {
           winner: winnerColorFinal,
-          reason: `Fim da partida! Placar: ${p1Score} a ${p2Score}`,
+          reason: finalReason,
         });
         const winnerSocket = io.sockets.sockets.get(finalWinnerData.socketId);
         if (winnerSocket && updatedWinner) {
           winnerSocket.emit("updateSaldo", { newSaldo: updatedWinner.saldo });
         }
+
+        // Salvar Histórico (Vitória Tablita)
+        await saveMatchHistory(room, finalWinnerData.email, finalReason);
       } catch (err) {
         console.error("Erro ao pagar prêmio Tablita:", err);
       }
     } else {
+      // EMPATE TABLITA FINAL
       try {
         await User.findOneAndUpdate(
           { email: p1Email },
@@ -206,9 +241,15 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
           { email: p2Email },
           { $inc: { saldo: room.bet } }
         );
+
+        const finalReason = `Partida empatada! Placar final: ${p1Score} a ${p2Score}. ${reason}`;
+
         io.to(room.roomCode).emit("gameDraw", {
-          reason: `Partida empatada! Placar final: ${p1Score} a ${p2Score}`,
+          reason: finalReason,
         });
+
+        // Salvar Histórico (Empate Tablita)
+        await saveMatchHistory(room, null, finalReason);
       } catch (err) {
         console.error("Erro ao devolver aposta em empate Tablita:", err);
       }
@@ -217,6 +258,7 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
       if (gameRooms[room.roomCode]) delete gameRooms[room.roomCode];
     }, 60000);
   } else {
+    // Continua para o próximo jogo da Tablita
     room.match.currentGame++;
     const scoreArray = [p1Score, p2Score];
     const nextGameTitle = `Fim da 1ª Partida!`;
@@ -256,7 +298,7 @@ function startNextTablitaGame(room) {
     movesSinceCapture: 0,
     damaMovesWithoutCaptureOrPawnMove: 0,
     openingName: room.match.opening.name,
-    mustCaptureWith: null, // Reset
+    mustCaptureWith: null,
   };
 
   const bestCaptures = findBestCaptureMoves(room.game.currentPlayer, room.game);
@@ -264,7 +306,6 @@ function startNextTablitaGame(room) {
 
   const gameState = { ...room.game, roomCode: room.roomCode, mandatoryPieces };
 
-  // Reseta os timers para o novo jogo da match
   if (room.timeControl === "match") {
     room.whiteTime = room.timerDuration;
     room.blackTime = room.timerDuration;

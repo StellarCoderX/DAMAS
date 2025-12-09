@@ -832,12 +832,13 @@ body {
   background: #d74c30;
 }
 
-/* --- ESTILOS PARA OS MODAIS PIX E SAQUE (UNIFICADO) --- */
+/* --- ESTILOS PARA OS MODAIS PIX, SAQUE, INDICAÇÕES E HISTÓRICO --- */
 
 /* Fundo Escuro do Overlay */
 #pix-overlay,
 #withdraw-overlay,
-#referrals-overlay {
+#referrals-overlay,
+#history-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -939,13 +940,15 @@ body {
 /* Botão Fechar Padronizado */
 #close-pix-overlay-btn,
 #close-withdraw-overlay-btn,
-#close-referrals-overlay-btn {
+#close-referrals-overlay-btn,
+#close-history-overlay-btn {
   background-color: #95a5a6;
   margin-top: 15px;
 }
 #close-pix-overlay-btn:hover,
 #close-withdraw-overlay-btn:hover,
-#close-referrals-overlay-btn:hover {
+#close-referrals-overlay-btn:hover,
+#close-history-overlay-btn:hover {
   background-color: #7f8c8d;
 }
 
@@ -966,4 +969,94 @@ body {
   font-size: 0.9em;
   line-height: 1.4;
   color: #bdc3c7;
+}
+
+/* ESTILOS PARA TABELA DE HISTÓRICO */
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85em;
+}
+.history-table th,
+.history-table td {
+  padding: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: left;
+}
+.history-table th {
+  background-color: rgba(0, 0, 0, 0.3);
+  color: #e85d40;
+}
+.history-win {
+  color: #2ecc71; /* Verde */
+}
+.history-loss {
+  color: #e74c3c; /* Vermelho */
+}
+.history-draw {
+  color: #95a5a6; /* Cinza */
+}
+
+/* --- NOVO: HUD DOS JOGADORES (NOMES ACIMA DO TABULEIRO) --- */
+.players-hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  max-width: 600px;
+  background-color: rgba(0, 0, 0, 0.4);
+  border-radius: 12px;
+  padding: 10px 20px;
+  margin-bottom: 15px;
+  border: 2px solid #382d21;
+}
+
+.player-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 1.1em;
+  color: #ecf0f1;
+}
+
+.piece-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);
+  border: 2px solid #ccc;
+}
+
+.white-piece-icon {
+  background: radial-gradient(circle at 30% 30%, #fff, #dcdcdc);
+  border-color: #ecf0f1;
+}
+
+.black-piece-icon {
+  background: radial-gradient(circle at 30% 30%, #555, #000);
+  border-color: #2c3e50;
+}
+
+.vs-badge {
+  font-weight: bold;
+  font-size: 1.2em;
+  color: #e85d40;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+@media (max-width: 500px) {
+  .players-hud {
+    flex-direction: row; /* Mantém na mesma linha em mobile */
+    justify-content: space-between;
+    padding: 8px 10px;
+    font-size: 0.9em;
+  }
+  .player-badge {
+    gap: 5px;
+  }
+  .piece-icon {
+    width: 20px;
+    height: 20px;
+  }
 }
