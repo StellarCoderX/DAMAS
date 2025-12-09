@@ -14,67 +14,170 @@
 </head>
 
 <body>
-  <div id="auth-container">
-    <form id="login-form">
-      <h2>LOGIN</h2>
-      <input type="email" id="login-email" placeholder="Email" required />
-      <input type="password" id="login-password" placeholder="Senha" required />
-      <button type="submit">Entrar</button>
-      <p>Não tem uma conta? <a href="#" id="show-register">Cadastre-se</a></p>
-    </form>
-    <form id="register-form" style="display: none">
-      <h2>Cadastro</h2>
-      <input type="email" id="register-email" placeholder="Email" required />
-      <input type="password" id="register-password" placeholder="Senha" required />
-      <button type="submit">Cadastrar</button>
-      <p>Já tem uma conta? <a href="#" id="show-login">Faça Login</a></p>
-    </form>
-    <p id="auth-message" class="message"></p>
+  <div id="main-container">
+    <div id="auth-container">
+      <form id="login-form">
+        <h2>LOGIN</h2>
+        <input type="email" id="login-email" placeholder="Email" required />
+        <input type="password" id="login-password" placeholder="Senha" required />
+        <button type="submit">Entrar</button>
+        <p>
+          Não tem uma conta? <a href="#" id="show-register">Cadastre-se</a>
+        </p>
+      </form>
+      <form id="register-form" style="display: none">
+        <h2>Cadastro</h2>
+        <input type="email" id="register-email" placeholder="Email" required />
+        <input type="password" id="register-password" placeholder="Senha" required />
+        <button type="submit">Cadastrar</button>
+        <p>Já tem uma conta? <a href="#" id="show-login">Faça Login</a></p>
+      </form>
+      <p id="auth-message" class="message"></p>
+    </div>
+
+    <div id="rules-container">
+      <h2>REGRAS BRASILEIRAS</h2>
+      <ul>
+        <li>A captura é Obrigatória.</li>
+        <li>É obrigado a capturar pela Lei da Maioria.</li>
+        <li>Pode capturar para trás.</li>
+        <li>Não existe sopro.</li>
+        <li>Pedra e Dama tem o mesmo valor para capturar e ser capturada.</li>
+        <li>
+          Só de passar pela casa de coração a pedra NÃO se transforma em Dama.
+        </li>
+        <li>
+          É permitido passar pela mesma casa mais de uma vez na captura.
+        </li>
+        <li>NÃO pode capturar a mesma Peça mais de uma vez.</li>
+        <li>
+          Primeiro efetua o movimento de captura, depois retira-se as peças.
+        </li>
+        <li>
+          O ganho acontece quando se captura todas as peças do adversário ou
+          quando o seu oponente não tem onde mexer.
+        </li>
+      </ul>
+    </div>
   </div>
 
   <div id="lobby-container" class="hidden">
     <h2 id="lobby-welcome-message"></h2>
 
-    <a href="https://w.app/gzqboq" id="add-balance-btn" target="_blank">Adicionar Saldo</a>
+    <button id="add-balance-btn">Adicionar Saldo</button>
 
-    <a href="https://w.app/fjvskr" id="withdraw-btn" target="_blank">Retirar Saldo</a>
-    <a href="https://chat.whatsapp.com/KAZlv5Eg5UeBh3GAiOUDUq" id="whatsapp-group-btn" target="_blank">Entrar no Grupo
-      do
-      WhatsApp</a>
-    <button id="logout-btn" style="background-color:#c0392b; margin-bottom: 20px;">Sair</button>
+    <a href="https://wa.me/5571920007957?text=QUERO%20RETIRAR%20SALDO%20NO%20MEU%20PERFIL!%20%20%3A)" id="withdraw-btn"
+      target="_blank">Retirar Saldo</a>
+    <a href="https://chat.whatsapp.com/IhFRzg8Bt89JhacRTdySUN?mode=wwt" id="whatsapp-group-btn" target="_blank">Entrar
+      no Grupo do WhatsApp</a>
+    <button id="logout-btn" style="background-color: #c0392b; margin-bottom: 20px">
+      Sair
+    </button>
 
-    <div class="lobby-section">
+    <div class="lobby-section" id="create-room-section">
       <h3>Criar uma nova partida</h3>
       <input type="number" id="bet-amount-input" placeholder="Valor da Aposta" min="1" value="1" />
-      <div
-        style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 10px; margin-bottom: 10px;">
-        <input type="checkbox" id="tablita-mode-checkbox" />
-        <label for="tablita-mode-checkbox">Jogar em modo Tablita</label>
+      <div id="game-mode-selection" style="
+            margin-top: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+          ">
+        <label for="game-mode-select">Modo:</label>
+        <select id="game-mode-select" style="
+              padding: 5px;
+              border-radius: 4px;
+              border: 1px solid #ccc;
+              background-color: #f0f0f0;
+            ">
+          <option value="classic">Clássico 8x8</option>
+          <option value="tablita">Tablita 8x8</option>
+          <option value="international">Internacional 10x10</option>
+        </select>
       </div>
+
+      <div id="time-control-selection" style="
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+          ">
+        <label for="time-control-select">Tipo de Tempo:</label>
+        <select id="time-control-select" style="
+              padding: 5px;
+              border-radius: 4px;
+              border: 1px solid #ccc;
+              background-color: #f0f0f0;
+            ">
+          <option value="move">Por Jogada (Padrão)</option>
+          <option value="match">Por Partida (Blitz)</option>
+        </select>
+      </div>
+
+      <div id="timer-selection-container" style="
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+          ">
+        <label for="timer-select">Duração:</label>
+        <select id="timer-select" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc">
+          <!-- Opções populadas via JS -->
+        </select>
+      </div>
+
       <button id="create-room-btn">Criar Sala</button>
     </div>
-    <div class="lobby-section">
-      <h3>Entrar numa partida</h3>
-      <input type="text" id="room-code-input" placeholder="Código da Sala" />
-      <button id="join-room-btn">Entrar na Sala</button>
-    </div>
+
     <div id="waiting-area" class="hidden">
       <p>A aguardar por um oponente...</p>
-      <p>
-        Partilhe este código com um amigo:
-        <strong id="room-code-display"></strong>
-      </p>
+      <p>A sua sala está visível para outros jogadores no lobby.</p>
+      <button id="cancel-room-btn" style="background-color: #c0392b; margin-top: 10px">
+        Cancelar
+      </button>
+      <strong id="room-code-display" style="display: none"></strong>
     </div>
+
+    <div class="lobby-section" id="open-rooms-section">
+      <h3>Salas de Espera (Entrar para Jogar)</h3>
+      <div id="open-rooms-list">
+        <p>A carregar salas...</p>
+      </div>
+    </div>
+
+    <!-- NOVA SEÇÃO PARA JOGOS EM ANDAMENTO -->
+    <div class="lobby-section" id="active-rooms-section" style="margin-top: 20px;">
+      <h3>Jogos em Andamento (Assistir)</h3>
+      <div id="active-rooms-list">
+        <p>Nenhum jogo em andamento.</p>
+      </div>
+    </div>
+
     <p id="lobby-error-message" class="error-message"></p>
   </div>
 
   <div id="game-container" class="hidden">
+    <!-- Indicador de Espectador -->
+    <div id="spectator-indicator" class="hidden"
+      style="background-color: #f39c12; color: #fff; padding: 5px 10px; border-radius: 5px; margin-bottom: 10px; font-weight: bold;">
+      👀 MODO ESPECTADOR
+    </div>
+
     <p id="game-status"></p>
     <div id="board"></div>
     <div id="game-info">
       <p>Vez de: <span id="turn">Brancas</span></p>
-      <p>Tempo restante: <span id="timer">40</span>s</p>
-      <button id="resign-btn" style="background-color: #c0392b; margin-top: 15px;">Desistir da Partida</button>
+      <p>Tempo: <span id="timer">--</span></p>
+      <div id="game-buttons">
+        <button id="resign-btn">Desistir</button>
+        <button id="draw-btn">Empate</button>
+        <!-- Botão Sair para Espectadores -->
+        <button id="spectator-leave-btn" class="hidden" style="background-color: #c0392b;">Sair do Jogo</button>
+      </div>
     </div>
   </div>
 
@@ -84,18 +187,38 @@
       <div class="firework"></div>
       <div class="firework"></div>
       <h1>Parabéns, Você Ganhou!</h1>
-      <button id="play-again-btn-winner">Jogar Novamente</button>
+      <p class="revanche-status"></p>
+      <div class="confirm-buttons">
+        <button class="revanche-btn">Revanche</button>
+        <button class="exit-lobby-btn">Voltar à Tela Principal</button>
+      </div>
     </div>
     <div id="loser-screen" class="hidden">
       <div class="emoji">😢</div>
       <h1>Você Perdeu</h1>
-      <button id="play-again-btn-loser">Jogar Novamente</button>
+      <p class="revanche-status"></p>
+      <div class="confirm-buttons">
+        <button class="revanche-btn">Revanche</button>
+        <button class="exit-lobby-btn">Voltar à Tela Principal</button>
+      </div>
     </div>
-    <div id="draw-screen" class="hidden"
-      style="text-align: center; color: white; background-color: #555; padding: 40px 60px; border-radius: 15px;">
+    <div id="draw-screen" class="hidden">
       <h1>Empate!</h1>
-      <p id="draw-reason" style="margin-bottom: 20px;">A partida terminou em empate.</p>
-      <button id="draw-play-again-btn">Voltar ao Lobby</button>
+      <p id="draw-reason"></p>
+      <p class="revanche-status"></p>
+      <div class="confirm-buttons">
+        <button class="revanche-btn">Revanche</button>
+        <button class="exit-lobby-btn">Voltar à Tela Principal</button>
+      </div>
+    </div>
+    <!-- Tela de Fim de Jogo para Espectadores -->
+    <div id="spectator-end-screen" class="hidden"
+      style="background-color: #2c3e50; color: white; padding: 40px; border-radius: 15px; text-align: center; border: 5px solid #3498db;">
+      <h1>Fim de Jogo</h1>
+      <p id="spectator-end-message"></p>
+      <div class="confirm-buttons">
+        <button class="exit-lobby-btn" style="background-color: #3498db;">Voltar ao Lobby</button>
+      </div>
     </div>
   </div>
 
@@ -106,7 +229,7 @@
         A aposta para esta sala é de
         <strong id="confirm-bet-amount"></strong> créditos.
       </p>
-      <p id="confirm-tablita-mode" style="font-weight: bold; margin-top: 10px;"></p>
+      <p id="confirm-game-mode" style="font-weight: bold; margin-top: 10px"></p>
       <p>Você aceita?</p>
       <div class="confirm-buttons">
         <button id="accept-bet-btn">Aceitar</button>
@@ -124,23 +247,55 @@
   <div id="next-game-overlay" class="hidden">
     <div id="next-game-box">
       <h2 id="next-game-title">Fim da 1ª Partida!</h2>
-      <p id="match-score-display" style="font-size: 1.2em; margin: 15px 0;"></p>
+      <p id="match-score-display" style="font-size: 1.2em; margin: 15px 0"></p>
       <p>A 2ª partida começará com as cores invertidas...</p>
-      <p style="margin-top: 15px;">A iniciar em <span id="next-game-timer">10</span>s</p>
+      <p style="margin-top: 15px">
+        A iniciar em <span id="next-game-timer">10</span>s
+      </p>
     </div>
   </div>
 
+  <div id="draw-request-overlay" class="hidden">
+    <div id="draw-request-box">
+      <h3>Pedido de Empate</h3>
+      <p>O seu oponente propôs um empate. Você aceita?</p>
+      <div class="confirm-buttons">
+        <button id="accept-draw-btn">Aceitar</button>
+        <button id="decline-draw-btn">Recusar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="pix-overlay" class="hidden">
+    <div id="pix-box">
+      <h3>Adicionar Saldo via PIX</h3>
+      <p>Faça o pagamento para a chave abaixo:</p>
+      <div class="pix-info">
+        <p><strong>Tipo de Chave:</strong> Copia e Cola</p>
+        <p>
+          <strong>Chave:</strong>
+          <span
+            id="pix-key">00020126580014br.gov.bcb.pix01362b3485a0-d28c-4d37-9b5d-b2efcac4cee652040000530398654045.005802BR5919TIAGO
+            SOUZA SANTANA6008Salvador6211050726f7879630451B0</span>
+        </p>
+        <p><strong>Nome:</strong> Tiago Souza Santana</p>
+      </div>
+      <button id="copy-pix-key-btn">Copiar Chave</button>
+      <p class="instructions">
+        Após o pagamento, envie o comprovativo para o nosso WhatsApp para que
+        o saldo seja adicionado à sua conta.
+      </p>
+      <a href="https://wa.me/5571920007957?text=Ol%C3%A1%21%20Estou%20enviando%20o%20comprovativo%20do%20meu%20pagamento%20PIX."
+        target="_blank" class="whatsapp-link">Enviar Comprovante!</a>
+      <button id="close-pix-overlay-btn">Fechar</button>
+    </div>
+  </div>
+
+  <audio id="move-sound" src="/sounds/move.mp3" preload="auto"></audio>
+  <audio id="capture-sound" src="/sounds/capture.mp3" preload="auto"></audio>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
-</body>
-
-</html>
-
-<audio id="move-sound" src="/sounds/move.mp3" preload="auto"></audio>
-<audio id="capture-sound" src="/sounds/capture.mp3" preload="auto"></audio>
-
-<script src="/socket.io/socket.io.js"></script>
-<script src="script.js"></script>
 </body>
 
 </html>

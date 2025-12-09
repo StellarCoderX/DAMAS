@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
-  // Elementos do DOM
+  // --- Elementos do DOM (Existentes) ---
   const authContainer = document.getElementById("auth-admin-container");
   const adminContainer = document.getElementById("admin-container");
   const secretForm = document.getElementById("secret-form");
@@ -7,9 +7,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const authMessage = document.getElementById("auth-admin-message");
   const searchInput = document.getElementById("search-input");
   const usersTableBody = document.querySelector("#users-table tbody");
+  const resetAllSaldosBtn = document.getElementById("reset-all-saldos-btn");
 
   let adminSecretKey = null;
-  let allUsers = []; 
+  let allUsers = [];
+
+  // --- LÓGICA DE ADMIN EXISTENTE ---
 
   // 1. Lida com o formulário de autenticação
   secretForm.addEventListener("submit", (e) => {
@@ -36,19 +39,21 @@ document.addEventListener("DOMContentLoaded", () => {
       if (response.status === 403) {
         authMessage.textContent = "Senha secreta inválida!";
         authMessage.style.color = "red";
-        adminSecretKey = null; 
+        adminSecretKey = null;
         return;
       }
       if (!response.ok) {
         throw new Error("Falha ao carregar utilizadores.");
       }
-      
+
       authContainer.classList.add("hidden");
       adminContainer.classList.remove("hidden");
 
       allUsers = await response.json();
-      renderTable(allUsers); 
+      renderTable(allUsers);
 
+      // Inicializa o tabuleiro de teste SÓ DEPOIS do login
+      initializeTestBoard();
     } catch (error) {
       authMessage.textContent = `Erro: ${error.message}`;
       authMessage.style.color = "red";
@@ -57,7 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 3. Função para renderizar (desenhar) a tabela de utilizadores
   function renderTable(users) {
-    usersTableBody.innerHTML = ""; 
+    usersTableBody.innerHTML = "";
     users.forEach((user) => {
       const row = document.createElement("tr");
       row.innerHTML = `
@@ -86,12 +91,12 @@ document.addEventListener("DOMContentLoaded", () => {
       handleDelete(email);
     }
   });
-  
+
   // 5. Função para editar o saldo
   function handleEdit(email) {
     const saldoCell = document.querySelector(`td[data-email="${email}"]`);
     const currentSaldo = saldoCell.querySelector("span").textContent;
-    
+
     const input = document.createElement("input");
     input.type = "number";
     input.value = currentSaldo;
@@ -118,13 +123,13 @@ document.addEventListener("DOMContentLoaded", () => {
           secret: adminSecretKey,
         }),
       });
-      
+
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Falha ao atualizar saldo.");
-      
+      if (!response.ok)
+        throw new Error(data.message || "Falha ao atualizar saldo.");
+
       alert(data.message);
       loadUsers();
-
     } catch (error) {
       alert(`Erro: ${error.message}`);
     }
@@ -132,25 +137,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 7. Função para excluir utilizador
   async function handleDelete(email) {
-    if (!confirm(`Tem a certeza que deseja excluir o utilizador ${email}? Esta ação não pode ser desfeita.`)) {
+    if (
+      !confirm(
+        `Tem a certeza que deseja excluir o utilizador ${email}? Esta ação não pode ser desfeita.`
+      )
+    ) {
       return;
     }
-    
+
     try {
       const response = await fetch(`/api/admin/user/${email}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ secret: adminSecretKey })
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret: adminSecretKey }),
       });
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.message || 'Falha ao excluir utilizador.');
+        throw new Error(data.message || "Falha ao excluir utilizador.");
       }
 
       alert(data.message);
       loadUsers();
-
     } catch (error) {
       alert(`Erro: ${error.message}`);
     }
@@ -159,43 +167,360 @@ document.addEventListener("DOMContentLoaded", () => {
   // 8. Funcionalidade de pesquisa
   searchInput.addEventListener("input", (e) => {
     const searchTerm = e.target.value.toLowerCase();
-    const filteredUsers = allUsers.filter(user => 
+    const filteredUsers = allUsers.filter((user) =>
       user.email.toLowerCase().includes(searchTerm)
     );
     renderTable(filteredUsers);
   });
 
   // 9. LÓGICA PARA O BOTÃO DE ZERAR SALDOS
-  const resetAllSaldosBtn = document.getElementById("reset-all-saldos-btn");
-
   if (resetAllSaldosBtn) {
-      resetAllSaldosBtn.addEventListener("click", async () => {
-          if (!confirm("TEM A CERTEZA ABSOLUTA?\nEsta ação irá zerar o saldo de TODOS os utilizadores e não pode ser desfeita.")) {
-              return;
+    resetAllSaldosBtn.addEventListener("click", async () => {
+      if (
+        !confirm(
+          "TEM A CERTEZA ABSOLUTA?\nEsta ação irá zerar o saldo de TODOS os utilizadores e não pode ser desfeita."
+        )
+      ) {
+        return;
+      }
+      if (
+        !confirm(
+          "Último aviso: Confirma que deseja zerar o saldo de todos os utilizadores?"
+        )
+      ) {
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/admin/reset-all-saldos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ secret: adminSecretKey }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || "Falha ao executar a operação.");
+        }
+
+        alert(data.message);
+        loadUsers();
+      } catch (error) {
+        alert(`Erro: ${error.message}`);
+      }
+    });
+  }
+
+  // --- ### NOVA LÓGICA DO TABULEIRO DE TESTE ### ---
+
+  const standardOpening = [
+    [0, "p", 0, "p", 0, "p", 0, "p"],
+    ["p", 0, "p", 0, "p", 0, "p", 0],
+    [0, "p", 0, "p", 0, "p", 0, "p"],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    ["b", 0, "b", 0, "b", 0, "b", 0],
+    [0, "b", 0, "b", 0, "b", 0, "b"],
+    ["b", 0, "b", 0, "b", 0, "b", 0],
+  ];
+
+  let testGame = {};
+  let selectedPiece = null;
+  let lastTestGameState = null;
+
+  // Elementos do DOM do tabuleiro de teste
+  const toggleTestBoardBtn = document.getElementById("toggle-test-board-btn");
+  const testBoardContainer = document.getElementById("test-board-container");
+  const boardElement = document.getElementById("board");
+  const testStatus = document.getElementById("test-status");
+  const resetBoardBtn = document.getElementById("reset-board-btn");
+  const switchTurnBtn = document.getElementById("switch-turn-btn");
+  const undoBoardBtn = document.getElementById("undo-board-btn");
+  const testTurnSpan = document.getElementById("test-turn");
+
+  function initializeTestBoard() {
+    // Liga os botões
+    toggleTestBoardBtn.addEventListener("click", () => {
+      testBoardContainer.classList.toggle("hidden");
+    });
+    resetBoardBtn.addEventListener("click", startTestGame);
+    undoBoardBtn.addEventListener("click", handleUndoMove);
+    switchTurnBtn.addEventListener("click", () => {
+      testGame.currentPlayer = testGame.currentPlayer === "b" ? "p" : "b";
+      updateTestGameUI();
+    });
+
+    // Configura o tabuleiro
+    createBoard();
+    startTestGame();
+  }
+
+  // <--- ADICIONE ESTA FUNÇÃO NOVA ---
+  function handleUndoMove() {
+    if (lastTestGameState) {
+      testGame = JSON.parse(JSON.stringify(lastTestGameState)); // Restaura o estado anterior
+      lastTestGameState = null; // Limpa o "undo" para não voltar duas vezes
+      renderPieces();
+      updateTestGameUI();
+      testStatus.textContent = "Jogada anterior restaurada.";
+    } else {
+      testStatus.textContent = "Nenhuma jogada para voltar.";
+    }
+  }
+
+  function startTestGame() {
+    testGame = {
+      boardState: JSON.parse(JSON.stringify(standardOpening)),
+      boardSize: 8, // <<< ADICIONADO: Garante que o teste use a lógica 8x8
+      currentPlayer: "b", // Começa com as brancas
+    };
+    selectedPiece = null;
+    lastTestGameState = null;
+    renderPieces();
+    updateTestGameUI();
+  }
+
+  function createBoard() {
+    boardElement.innerHTML = "";
+    boardElement.style.display = "grid";
+    boardElement.style.gridTemplateColumns = "repeat(8, min(60px, 10vw))";
+    boardElement.style.gridTemplateRows = "repeat(8, min(60px, 10vw))";
+    boardElement.style.border = "12px solid #382d21";
+    boardElement.style.borderRadius = "5px";
+    boardElement.style.boxShadow =
+      "0 15px 30px rgba(0, 0, 0, 0.4), inset 0 0 15px rgba(0, 0, 0, 0.6)";
+
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const square = document.createElement("div");
+        square.classList.add(
+          "square",
+          (row + col) % 2 === 1 ? "dark" : "light"
+        );
+        square.dataset.row = row;
+        square.dataset.col = col;
+        boardElement.appendChild(square);
+      }
+    }
+    boardElement.addEventListener("click", handleBoardClick);
+  }
+
+  function renderPieces() {
+    document.querySelectorAll("#board .piece").forEach((p) => p.remove());
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const pieceType = testGame.boardState[row][col];
+        if (pieceType !== 0) {
+          const piece = document.createElement("div");
+          piece.classList.add("piece");
+          const isBlack = pieceType.toLowerCase() === "p";
+          piece.classList.add(isBlack ? "black-piece" : "white-piece");
+          const isKing = pieceType === "P" || pieceType === "B";
+          if (isKing) {
+            piece.classList.add("king");
           }
-          if (!confirm("Último aviso: Confirma que deseja zerar o saldo de todos os utilizadores?")) {
-              return;
+          const square = document.querySelector(
+            `#board .square[data-row='${row}'][data-col='${col}']`
+          );
+          if (square) {
+            square.appendChild(piece);
+          }
+        }
+      }
+    }
+  }
+
+  function updateTestGameUI() {
+    testTurnSpan.textContent =
+      testGame.currentPlayer === "b" ? "Brancas" : "Pretas";
+    testStatus.textContent = "";
+
+    highlightMandatoryPieces([]);
+    unselectPiece();
+
+    if (!window.gameLogic.hasValidMoves(testGame.currentPlayer, testGame)) {
+      const winner = testGame.currentPlayer === "b" ? "Pretas" : "Brancas";
+      testStatus.textContent = `FIM DE JOGO! O jogador ${winner} venceu por bloqueio!`;
+      return;
+    }
+
+    const bestCaptures = window.gameLogic.findBestCaptureMoves(
+      testGame.currentPlayer,
+      testGame
+    );
+    if (bestCaptures.length > 0) {
+      testStatus.textContent = "Captura Obrigatória!";
+      const mandatoryPieces = bestCaptures.map((seq) => seq[0]);
+      highlightMandatoryPieces(mandatoryPieces);
+    }
+  }
+
+  function handleBoardClick(e) {
+    const square = e.target.closest(".square");
+    if (!square) return;
+
+    const row = parseInt(square.dataset.row);
+    const col = parseInt(square.dataset.col);
+    const clickedPieceElement = e.target.closest(".piece");
+
+    // 1. TENTATIVA DE MOVIMENTO
+    if (selectedPiece) {
+      if (square.classList.contains("valid-move-highlight")) {
+        const move = {
+          from: { row: selectedPiece.row, col: selectedPiece.col },
+          to: { row, col },
+        };
+
+        const isValid = window.gameLogic.isMoveValid(
+          move.from,
+          move.to,
+          testGame.currentPlayer,
+          testGame,
+          true // Ignora a regra da maioria para o teste
+        );
+
+        if (isValid.valid) {
+          lastTestGameState = JSON.parse(JSON.stringify(testGame));
+          const piece = testGame.boardState[move.from.row][move.from.col];
+          testGame.boardState[move.to.row][move.to.col] = piece;
+          testGame.boardState[move.from.row][move.from.col] = 0;
+
+          let canCaptureAgain = false;
+
+          if (isValid.isCapture) {
+            testGame.boardState[isValid.capturedPos.row][
+              isValid.capturedPos.col
+            ] = 0;
+            const nextCaptures =
+              window.gameLogic.getAllPossibleCapturesForPiece(
+                move.to.row,
+                move.to.col,
+                testGame
+              );
+            canCaptureAgain = nextCaptures.length > 0;
           }
 
-          try {
-              const response = await fetch('/api/admin/reset-all-saldos', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ secret: adminSecretKey })
-              });
-
-              const data = await response.json();
-
-              if (!response.ok) {
-                  throw new Error(data.message || 'Falha ao executar a operação.');
-              }
-
-              alert(data.message);
-              loadUsers();
-
-          } catch (error) {
-              alert(`Erro: ${error.message}`);
+          if (!canCaptureAgain) {
+            if (piece === "b" && move.to.row === 0) {
+              testGame.boardState[move.to.row][move.to.col] = "B";
+            } else if (piece === "p" && move.to.row === 7) {
+              testGame.boardState[move.to.row][move.to.col] = "P";
+            }
           }
+
+          if (!canCaptureAgain) {
+            testGame.currentPlayer = testGame.currentPlayer === "b" ? "p" : "b";
+          }
+
+          renderPieces();
+          updateTestGameUI();
+        } else {
+          testStatus.textContent = isValid.reason || "Movimento inválido";
+          unselectPiece();
+        }
+        return;
+      }
+    }
+
+    // 2. TENTATIVA DE SELEÇÃO
+    unselectPiece(); // Limpa seleção anterior
+
+    if (clickedPieceElement) {
+      const pieceColor = clickedPieceElement.classList.contains("white-piece")
+        ? "b"
+        : "p";
+
+      if (pieceColor === testGame.currentPlayer) {
+        selectPiece(clickedPieceElement, row, col);
+      }
+    }
+  }
+
+  function selectPiece(pieceElement, row, col) {
+    unselectPiece();
+    pieceElement.classList.add("selected");
+    selectedPiece = { element: pieceElement, row, col };
+    showValidMoves(row, col);
+  }
+
+  function unselectPiece() {
+    document
+      .querySelectorAll("#board .valid-move-highlight")
+      .forEach((square) => {
+        square.classList.remove("valid-move-highlight");
       });
+    if (selectedPiece) {
+      selectedPiece.element.classList.remove("selected");
+      selectedPiece = null;
+    }
+  }
+
+  function highlightMandatoryPieces(piecesToHighlight) {
+    document
+      .querySelectorAll("#board .mandatory-capture")
+      .forEach((p) => p.classList.remove("mandatory-capture"));
+    if (piecesToHighlight && piecesToHighlight.length > 0) {
+      piecesToHighlight.forEach((pos) => {
+        const square = document.querySelector(
+          `#board .square[data-row='${pos.row}'][data-col='${pos.col}']`
+        );
+        if (square && square.firstChild) {
+          square.firstChild.classList.add("mandatory-capture");
+        }
+      });
+    }
+  }
+
+  // ### FUNÇÃO CORRIGIDA E LIMPA ###
+  function showValidMoves(row, col) {
+    const piece = testGame.boardState[row][col];
+    if (piece === 0) return;
+
+    const playerColor = piece.toLowerCase();
+    let validMoves = [];
+
+    const bestCaptures = window.gameLogic.findBestCaptureMoves(
+      playerColor,
+      testGame
+    );
+
+    if (bestCaptures.length > 0) {
+      // Se há capturas obrigatórias
+      const capturesForThisPiece = bestCaptures.filter(
+        (seq) => seq[0].row === row && seq[0].col === col
+      );
+      validMoves = capturesForThisPiece.map((seq) => seq[1]);
+    } else {
+      // Se não há capturas, calcula movimentos normais
+      for (let toRow = 0; toRow < 8; toRow++) {
+        for (let toCol = 0; toCol < 8; toCol++) {
+          const result = window.gameLogic.isMoveValid(
+            { row, col },
+            { row: toRow, col: toCol },
+            playerColor,
+            testGame,
+            true // Ignora a regra da maioria
+          );
+
+          // ### CORREÇÃO APLICADA AQUI ###
+          // Só adiciona o movimento se for válido E NÃO for uma captura
+          // (pois este bloco 'else' só deve correr se não houver capturas obrigatórias)
+          if (result.valid && !result.isCapture) {
+            validMoves.push({ row: toRow, col: toCol });
+          }
+        }
+      }
+    }
+
+    // Destaca os quadrados
+    validMoves.forEach((move) => {
+      const square = document.querySelector(
+        `#board .square[data-row='${move.row}'][data-col='${move.col}']`
+      );
+      if (square) {
+        square.classList.add("valid-move-highlight");
+      }
+    });
   }
 });
