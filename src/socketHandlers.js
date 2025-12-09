@@ -1,4 +1,4 @@
-// src/socketHandlers.js (CORREÇÃO: FORMATO DE DADOS DO LOBBY)
+// src/socketHandlers.js (CORREÇÃO DE REPETIÇÃO DE SORTEIO + 20 ABERTURAS)
 
 const User = require("../models/User");
 const {
@@ -17,9 +17,7 @@ const { startTimer, resetTimer, processEndOfGame } = require("./gameManager");
 
 const gameRooms = {};
 
-// ### CORREÇÃO AQUI: Retorna objeto { waiting, active } ###
 function getLobbyInfo() {
-  // 1. Salas de Espera (1 jogador)
   const waitingRooms = Object.values(gameRooms)
     .filter((room) => room.players.length === 1 && !room.isGameConcluded)
     .map((room) => ({
@@ -31,7 +29,6 @@ function getLobbyInfo() {
       timerDuration: room.timerDuration,
     }));
 
-  // 2. Jogos em Andamento (2 jogadores) - Para Espectadores
   const activeRooms = Object.values(gameRooms)
     .filter((room) => room.players.length === 2 && !room.isGameConcluded)
     .map((room) => ({
@@ -82,7 +79,23 @@ function initializeSocket(io) {
       boardState = JSON.parse(JSON.stringify(standardOpening10x10));
       boardSize = 10;
     } else if (room.gameMode === "tablita") {
-      const randomIndex = Math.floor(Math.random() * idfTablitaOpenings.length);
+      // --- LÓGICA DE SORTEIO ANTI-REPETIÇÃO ---
+      let randomIndex;
+      let attempts = 0;
+
+      // Tenta sortear um número diferente do anterior até 5 vezes
+      do {
+        randomIndex = Math.floor(Math.random() * idfTablitaOpenings.length);
+        attempts++;
+      } while (
+        randomIndex === room.lastOpeningIndex &&
+        idfTablitaOpenings.length > 1 &&
+        attempts < 5
+      );
+
+      // Salva o índice atual para a próxima comparação
+      room.lastOpeningIndex = randomIndex;
+
       const selectedOpening = idfTablitaOpenings[randomIndex];
       boardState = JSON.parse(JSON.stringify(selectedOpening.board));
       openingName = selectedOpening.name;
@@ -151,7 +164,10 @@ function initializeSocket(io) {
     io.to(room.roomCode).emit("gameStart", gameState);
   }
 
+  // ... (RESTO DO CÓDIGO PERMANECE IGUAL) ...
+
   io.on("connection", (socket) => {
+    // ... código de conexão existente ...
     console.log("Um novo usuário se conectou!", socket.id);
 
     socket.on("enterLobby", () => {
@@ -251,6 +267,7 @@ function initializeSocket(io) {
         drawOfferBy: null,
         disconnectTimeout: null,
         isGameConcluded: false,
+        lastOpeningIndex: -1, // Inicializa o índice do sorteio
       };
 
       socket.emit("roomCreated", { roomCode });
