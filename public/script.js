@@ -958,6 +958,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function selectPiece(pieceElement, row, col) {
     unselectPiece();
+    // ### CORREÇÃO: Adicionar a classe .selected ao elemento da peça visualmente ###
+    pieceElement.classList.add("selected");
     selectedPiece = { element: pieceElement, row, col };
     socket.emit("getValidMoves", { row, col, roomCode: currentRoom });
   }
@@ -972,9 +974,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // ### ATUALIZADO: Aceita parâmetro suppressSound para evitar som no Sync ###
+  // ### ATUALIZADO: Lógica de feedback visual e vibração ###
   function updateGame(gameState, suppressSound = false) {
-    // Atualiza Watchdog sempre que recebe estado
     lastPacketTime = Date.now();
 
     const oldPieceCount = boardState.flat().filter((p) => p !== 0).length;
@@ -982,7 +983,6 @@ document.addEventListener("DOMContentLoaded", () => {
       .flat()
       .filter((p) => p !== 0).length;
 
-    // Se suppressSound for true (ex: durante sync), não toca nada
     if (!suppressSound && newPieceCount > 0 && oldPieceCount > 0) {
       if (newPieceCount < oldPieceCount) {
         captureSound.currentTime = 0;
@@ -997,6 +997,35 @@ document.addEventListener("DOMContentLoaded", () => {
     renderPieces();
     turnDisplay.textContent =
       gameState.currentPlayer === "b" ? "Brancas" : "Pretas";
+
+    // 1. Aplica destaque da última jogada
+    document
+      .querySelectorAll(".last-move")
+      .forEach((el) => el.classList.remove("last-move"));
+    if (gameState.lastMove) {
+      const fromSq = document.querySelector(
+        `.square[data-row='${gameState.lastMove.from.row}'][data-col='${gameState.lastMove.from.col}']`
+      );
+      const toSq = document.querySelector(
+        `.square[data-row='${gameState.lastMove.to.row}'][data-col='${gameState.lastMove.to.col}']`
+      );
+      if (fromSq) fromSq.classList.add("last-move");
+      if (toSq) toSq.classList.add("last-move");
+    }
+
+    // 2. Feedback de Turno (Visual e Hápitco)
+    if (!isSpectator) {
+      const isMyTurn =
+        gameState.currentPlayer === (myColor === "b" ? "b" : "p");
+      if (isMyTurn) {
+        boardElement.classList.add("your-turn-active");
+        if (!suppressSound && navigator.vibrate) {
+          navigator.vibrate(200); // Vibra por 200ms
+        }
+      } else {
+        boardElement.classList.remove("your-turn-active");
+      }
+    }
   }
 
   function highlightMandatoryPieces(piecesToHighlight) {

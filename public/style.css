@@ -153,15 +153,25 @@ body {
   border-radius: 50%;
   cursor: pointer;
   box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.4);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border 0.2s ease; /* Adicionado transição para border */
   display: flex;
   justify-content: center;
   align-items: center;
+  position: relative; /* Necessário para z-index funcionar com o highlight */
+  z-index: 2; /* Peça acima do destaque */
 }
 
 .piece:hover {
   transform: scale(1.1) translateY(-3px);
   box-shadow: 8px 8px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* ### NOVO: Destaque para a peça selecionada (A LUZ VERDE NO CLIQUE) ### */
+.piece.selected {
+  border: 4px solid #2ecc71; /* Borda verde sólida */
+  box-shadow: 0 0 20px #2ecc71, inset 0 0 10px #2ecc71; /* Brilho externo e interno intenso */
+  transform: scale(1.15); /* Aumenta um pouco mais para destacar */
+  z-index: 10; /* Garante que fique acima de tudo */
 }
 
 .white-piece {
@@ -539,33 +549,43 @@ body {
   }
 }
 
+/* MELHORIA: Use position absolute para centralizar perfeitamente o ponto verde */
 .valid-move-highlight {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative; /* Para garantir sobreposição correta */
+  z-index: 1;
 }
 .valid-move-highlight::after {
   content: "";
   display: block;
+  position: absolute; /* Mudança para absolute para não afetar layout */
   width: 30%;
   height: 30%;
-  background-color: rgba(46, 204, 113, 0.7);
+  background-color: rgba(
+    46,
+    204,
+    113,
+    0.9
+  ); /* Um pouco mais opaco para visibilidade */
   border-radius: 50%;
-  box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
+  box-shadow: 0 0 10px rgba(46, 204, 113, 0.8);
   animation: pulse 1.5s infinite ease-in-out;
+  pointer-events: none; /* Garante que o clique passe através do ponto */
 }
 @keyframes pulse {
   0% {
     transform: scale(0.9);
-    opacity: 0.7;
+    opacity: 0.8;
   }
   50% {
-    transform: scale(1.2);
+    transform: scale(1.3); /* Pulso maior */
     opacity: 1;
   }
   100% {
     transform: scale(0.9);
-    opacity: 0.7;
+    opacity: 0.8;
   }
 }
 
@@ -1133,4 +1153,41 @@ body {
   #timer {
     font-size: 2.8rem; /* Um pouco menor no mobile, mas ainda grande */
   }
+}
+
+/* ### NOVOS ESTILOS PARA JOGABILIDADE ### */
+
+/* Destaque da última jogada */
+.last-move {
+  position: relative;
+}
+.last-move::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(241, 196, 15, 0.5); /* Amarelo translúcido */
+  z-index: 1; /* Abaixo da peça (se tiver), acima do tabuleiro */
+  pointer-events: none;
+}
+
+/* Animação para indicar a vez do jogador */
+@keyframes turn-pulse-border {
+  0% {
+    box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(46, 204, 113, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(46, 204, 113, 0);
+  }
+}
+
+.your-turn-active {
+  animation: turn-pulse-border 2s infinite;
+  border-color: #2ecc71 !important; /* Borda Verde */
+  transition: border-color 0.3s ease;
 }

@@ -1,4 +1,4 @@
-// src/socketHandlers.js (CORREÇÃO: DEFINIÇÃO DE ROOM ANTES DO USO)
+// src/socketHandlers.js (COM MELHORIAS DE JOGABILIDADE - LAST MOVE)
 
 const User = require("../models/User");
 const {
@@ -154,6 +154,7 @@ function initializeSocket(io) {
       damaMovesWithoutCaptureOrPawnMove: 0,
       openingName: openingName,
       mustCaptureWith: null,
+      lastMove: null, // ### NOVO: Rastreamento da última jogada ###
     };
 
     if (!hasValidMoves(room.game.currentPlayer, room.game)) {
@@ -219,6 +220,9 @@ function initializeSocket(io) {
 
       game.boardState[to.row][to.col] = game.boardState[from.row][from.col];
       game.boardState[from.row][from.col] = 0;
+
+      // ### NOVO: Salva a última jogada para destaque visual ###
+      game.lastMove = { from, to };
 
       let canCaptureAgain = false;
       let wasPromotion = false;
@@ -496,8 +500,6 @@ function initializeSocket(io) {
       socket.userData = data.user;
       const { roomCode } = data;
 
-      // ### CORREÇÃO AQUI ###
-      // Definimos 'room' ANTES de usá-lo na verificação abaixo
       const room = gameRooms[roomCode];
 
       if (!room || room.players.length >= 2) {
@@ -523,7 +525,7 @@ function initializeSocket(io) {
           { $inc: { saldo: -room.bet } }
         );
       } catch (err) {
-        io.to(roomCode).emit("joinError", {
+        io.to(room.roomCode).emit("joinError", {
           message: "Erro ao processar a aposta.",
         });
         delete gameRooms[roomCode];
