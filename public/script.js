@@ -134,6 +134,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const refCode = urlParams.get("ref");
   if (refCode && referralCodeInput) {
     referralCodeInput.value = refCode;
+    // ### ALTERAÇÃO: Oculta o campo se houver código de referência ###
+    referralCodeInput.style.display = "none"; 
+    
     if (loginForm && registerForm) {
       loginForm.style.display = "none";
       registerForm.style.display = "block";
@@ -331,8 +334,8 @@ document.addEventListener("DOMContentLoaded", () => {
         refreshLobbyBtn.textContent = "Carregando...";
         refreshLobbyBtn.disabled = true;
         setTimeout(() => {
-          refreshLobbyBtn.textContent = originalText;
-          refreshLobbyBtn.disabled = false;
+            refreshLobbyBtn.textContent = originalText;
+            refreshLobbyBtn.disabled = false;
         }, 1000);
       }
     });
@@ -1218,7 +1221,9 @@ document.addEventListener("DOMContentLoaded", () => {
       updatePlayerNames(gameState.users);
     } catch (e) {
       console.error("ERRO CRÍTICO NO GAMESTART:", e);
-      alert(`Erro ao iniciar: ${e.message}. Tente recarregar a página.`);
+      alert(
+        `Erro ao iniciar: ${e.message}. Tente recarregar a página.`
+      );
       returnToLobby();
     }
   });
@@ -1255,16 +1260,12 @@ document.addEventListener("DOMContentLoaded", () => {
       if (newPieceCount < oldPieceCount) {
         if (captureSound) {
           captureSound.currentTime = 0;
-          captureSound
-            .play()
-            .catch((e) => console.log("Áudio bloqueado (Capture):", e));
+          captureSound.play().catch((e) => console.log("Áudio bloqueado (Capture):", e));
         }
       } else {
         if (moveSound) {
           moveSound.currentTime = 0;
-          moveSound
-            .play()
-            .catch((e) => console.log("Áudio bloqueado (Move):", e));
+          moveSound.play().catch((e) => console.log("Áudio bloqueado (Move):", e));
         }
       }
     }
@@ -1381,7 +1382,7 @@ document.addEventListener("DOMContentLoaded", () => {
   socket.on("gameOver", (data) => {
     if (isGameOver) return;
     isGameOver = true;
-
+    
     // ### ATUALIZADO: PARA O WATCHDOG AO TERMINAR ###
     stopWatchdog();
 
@@ -1407,7 +1408,7 @@ document.addEventListener("DOMContentLoaded", () => {
   socket.on("gameDraw", (data) => {
     if (isGameOver) return;
     isGameOver = true;
-
+    
     // ### ATUALIZADO: PARA O WATCHDOG AO TERMINAR ###
     stopWatchdog();
 
