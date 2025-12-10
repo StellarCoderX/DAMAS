@@ -1,4 +1,4 @@
-// index.js (COM ROTA DE HISTÓRICO)
+// index.js (COM ROTA DE HISTÓRICO E CORS HABILITADO)
 require("dotenv").config();
 
 const express = require("express");
@@ -7,8 +7,7 @@ const socketIo = require("socket.io");
 const mongoose = require("mongoose");
 const User = require("./models/User");
 const Withdrawal = require("./models/Withdrawal");
-const MatchHistory = require("./models/MatchHistory"); // Importação do Modelo
-constQb = require("bcryptjs"); // Nota: Pequeno erro de digitação corrigido aqui (require("bcryptjs"))
+const MatchHistory = require("./models/MatchHistory");
 const bcrypt = require("bcryptjs");
 
 const { initializeSocket, gameRooms } = require("./src/socketHandlers");
@@ -16,7 +15,14 @@ const { initializeManager } = require("./src/gameManager");
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+
+// ### CORREÇÃO 1: Habilitar CORS para permitir conexão de outros dispositivos ###
+const io = socketIo(server, {
+  cors: {
+    origin: "*", // Permite qualquer origem (celular, pc, etc)
+    methods: ["GET", "POST"],
+  },
+});
 
 const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URI;
@@ -162,12 +168,7 @@ app.post("/api/user/history", async (req, res) => {
     // Busca partidas onde o usuário foi player1 OU player2
     const emailLower = email.toLowerCase();
     const history = await MatchHistory.find({
-      $or: [
-        { MQ: "" },
-        { player1: emailLower },
-        { MQ: "" },
-        { player2: emailLower },
-      ],
+      $or: [{ player1: emailLower }, { player2: emailLower }],
     })
       .sort({ createdAt: -1 }) // Mais recentes primeiro
       .limit(50); // Limita às últimas 50 partidas

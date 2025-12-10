@@ -958,8 +958,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function selectPiece(pieceElement, row, col) {
     unselectPiece();
-    // ### CORREÇÃO: Adicionar a classe .selected ao elemento da peça visualmente ###
-    pieceElement.classList.add("selected");
     selectedPiece = { element: pieceElement, row, col };
     socket.emit("getValidMoves", { row, col, roomCode: currentRoom });
   }

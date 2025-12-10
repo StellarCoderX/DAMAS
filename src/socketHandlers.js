@@ -1,4 +1,4 @@
-// src/socketHandlers.js (COM MELHORIAS DE JOGABILIDADE - LAST MOVE)
+// src/socketHandlers.js (CORREÇÃO CRÍTICA DE INÍCIO DE JOGO)
 
 const User = require("../models/User");
 const {
@@ -26,7 +26,7 @@ function getLobbyInfo() {
       bet: room.bet,
       gameMode: room.gameMode,
       timeControl: room.timeControl,
-      creatorEmail: room.players[0].user.email,
+      creatorEmail: room.players[0]?.user?.email || "Desconhecido", // Proteção ?.
       timerDuration: room.timerDuration,
     }));
 
@@ -37,8 +37,8 @@ function getLobbyInfo() {
       bet: room.bet,
       gameMode: room.gameMode,
       timeControl: room.timeControl,
-      player1Email: room.players[0].user.email,
-      player2Email: room.players[1].user.email,
+      player1Email: room.players[0]?.user?.email || "P1", // Proteção ?.
+      player2Email: room.players[1]?.user?.email || "P2", // Proteção ?.
       timerDuration: room.timerDuration,
     }));
 
@@ -154,7 +154,7 @@ function initializeSocket(io) {
       damaMovesWithoutCaptureOrPawnMove: 0,
       openingName: openingName,
       mustCaptureWith: null,
-      lastMove: null, // ### NOVO: Rastreamento da última jogada ###
+      lastMove: null,
     };
 
     if (!hasValidMoves(room.game.currentPlayer, room.game)) {
@@ -184,7 +184,18 @@ function initializeSocket(io) {
       roomCode: room.roomCode,
       mandatoryPieces,
     };
+
+    // ### CORREÇÃO CRÍTICA: ENVIO REDUNDANTE ###
+    // Envia para a sala (padrão)
     io.to(room.roomCode).emit("gameStart", gameState);
+
+    // Envia DIRETAMENTE para os sockets dos jogadores (Garantia de entrega)
+    io.to(whitePlayer.socketId).emit("gameStart", gameState);
+    io.to(blackPlayer.socketId).emit("gameStart", gameState);
+
+    console.log(
+      `[GameStart] Enviado para sala ${room.roomCode} e jogadores individuais.`
+    );
   }
 
   async function executeMove(roomCode, from, to, socketId) {
@@ -221,7 +232,6 @@ function initializeSocket(io) {
       game.boardState[to.row][to.col] = game.boardState[from.row][from.col];
       game.boardState[from.row][from.col] = 0;
 
-      // ### NOVO: Salva a última jogada para destaque visual ###
       game.lastMove = { from, to };
 
       let canCaptureAgain = false;
