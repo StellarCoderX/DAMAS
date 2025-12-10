@@ -1,4 +1,4 @@
-// src/socketHandlers.js (COM FUNÇÃO ANTI-TRAVAMENTO / SINCRONIZAÇÃO)
+// src/socketHandlers.js (CORREÇÃO: DEFINIÇÃO DE ROOM ANTES DO USO)
 
 const User = require("../models/User");
 const {
@@ -495,6 +495,11 @@ function initializeSocket(io) {
       if (!data || !data.user) return;
       socket.userData = data.user;
       const { roomCode } = data;
+
+      // ### CORREÇÃO AQUI ###
+      // Definimos 'room' ANTES de usá-lo na verificação abaixo
+      const room = gameRooms[roomCode];
+
       if (!room || room.players.length >= 2) {
         socket.emit("joinError", {
           message: "Sala indisponível ou já iniciada.",
@@ -528,23 +533,19 @@ function initializeSocket(io) {
       io.emit("updateLobby", getLobbyInfo());
     });
 
-    // ### NOVA FUNÇÃO: SINCRONIZAÇÃO DE JOGO (ANTI-TRAVAMENTO) ###
     socket.on("requestGameSync", (data) => {
       const { roomCode } = data;
       const room = gameRooms[roomCode];
       if (!room || !room.game) return;
 
-      // Verifica se o jogador está na sala
       const isPlayer = room.players.some((p) => p.socketId === socket.id);
       if (!isPlayer) return;
 
-      // Atualiza o socketId do jogador se tiver mudado (ex: reconexão silenciosa)
       const player = room.players.find(
         (p) => p.user.email === socket.userData?.email
       );
       if (player) player.socketId = socket.id;
 
-      // Prepara os dados de tempo
       let timeData = {};
       if (room.timeControl === "match") {
         timeData = { whiteTime: room.whiteTime, blackTime: room.blackTime };
@@ -552,7 +553,6 @@ function initializeSocket(io) {
         timeData = { timeLeft: room.timeLeft };
       }
 
-      // Envia o estado completo para o solicitante
       socket.emit("gameResumed", {
         gameState: room.game,
         ...timeData,
