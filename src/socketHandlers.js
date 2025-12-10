@@ -1,4 +1,4 @@
-// src/socketHandlers.js (COM CAPTURA AUTOMÁTICA EM CADEIA)
+// src/socketHandlers.js (CORREÇÃO: LIMPEZA AUTOMÁTICA DE SALAS FANTASMAS)
 
 const User = require("../models/User");
 const {
@@ -12,7 +12,7 @@ const {
   hasValidMoves,
   getAllPossibleCapturesForPiece,
   findBestCaptureMoves,
-  getUniqueCaptureMove, // Importado
+  getUniqueCaptureMove,
 } = require("./gameLogic");
 const { startTimer, resetTimer, processEndOfGame } = require("./gameManager");
 
@@ -46,6 +46,34 @@ function getLobbyInfo() {
 }
 
 function initializeSocket(io) {
+  // --- FUNÇÃO AUXILIAR DE LIMPEZA ---
+  // Remove qualquer sala de espera que este usuário tenha criado anteriormente
+  function cleanupPreviousRooms(userEmail) {
+    const roomsToRemove = [];
+    Object.keys(gameRooms).forEach((code) => {
+      const r = gameRooms[code];
+      // Verifica se a sala tem apenas 1 jogador (espera) e se o criador é o usuário atual
+      if (
+        r.players.length === 1 &&
+        !r.isGameConcluded &&
+        r.players[0].user.email === userEmail
+      ) {
+        roomsToRemove.push(code);
+      }
+    });
+
+    roomsToRemove.forEach((code) => {
+      delete gameRooms[code];
+      console.log(
+        `[Limpeza] Sala ${code} excluída automaticamente pois o criador (${userEmail}) iniciou outra ação.`
+      );
+    });
+
+    if (roomsToRemove.length > 0) {
+      io.emit("updateLobby", getLobbyInfo());
+    }
+  }
+
   async function startGameLogic(room) {
     const player1 = room.players[0];
     const player2 = room.players[1];
@@ -161,18 +189,13 @@ function initializeSocket(io) {
     io.to(room.roomCode).emit("gameStart", gameState);
   }
 
-  // --- LÓGICA DE MOVIMENTO PRINCIPAL ---
-  // Extraída para uma função para ser reutilizada pelo Auto-Move
   async function executeMove(roomCode, from, to, socketId) {
     const gameRoom = gameRooms[roomCode];
     if (!gameRoom || !gameRoom.game) return;
     const game = gameRoom.game;
 
-    // Identifica cor do jogador que está "movendo" (mesmo que automático)
-    // Se for automação, socketId pode ser simulado ou usamos o currentPlayer
     const playerColor = game.currentPlayer;
 
-    // Validação de segurança se for movimento manual
     if (socketId) {
       const socketPlayerColor = game.players.white === socketId ? "b" : "p";
       if (socketPlayerColor !== playerColor) return;
@@ -186,7 +209,6 @@ function initializeSocket(io) {
     const isValid = isMoveValid(from, to, playerColor, game);
 
     if (isValid.valid) {
-      // 1. Processa Movimento e Captura
       const pieceBeforeMove = game.boardState[from.row][from.col];
       const isPieceDama = pieceBeforeMove.toUpperCase() === pieceBeforeMove;
 
@@ -214,7 +236,6 @@ function initializeSocket(io) {
         canCaptureAgain = nextCaptures.length > 0;
       }
 
-      // 2. Promoção
       if (!canCaptureAgain) {
         const currentPiece = game.boardState[to.row][to.col];
         if (currentPiece === "b" && to.row === 0) {
@@ -232,7 +253,6 @@ function initializeSocket(io) {
         game.damaMovesWithoutCaptureOrPawnMove = 0;
       }
 
-      // 3. Verifica Fim de Jogo (Empates e Vitórias)
       let whitePieces = 0;
       let whiteDames = 0;
       let blackPieces = 0;
@@ -297,7 +317,6 @@ function initializeSocket(io) {
         return processEndOfGame(winner, loser, gameRoom, "Fim de jogo!");
       }
 
-      // 4. Prepara Próximo Turno ou Captura em Cadeia
       if (!canCaptureAgain) {
         game.mustCaptureWith = null;
         game.currentPlayer = game.currentPlayer === "b" ? "p" : "b";
@@ -310,7 +329,6 @@ function initializeSocket(io) {
             "Oponente bloqueado!"
           );
         }
-        // Reseta timer apenas na troca de turno
         resetTimer(roomCode);
       } else {
         game.mustCaptureWith = { row: to.row, col: to.col };
@@ -323,14 +341,10 @@ function initializeSocket(io) {
 
       io.to(roomCode).emit("gameStateUpdate", { ...game, mandatoryPieces });
 
-      // ### AUTOMAÇÃO DE CAPTURA EM CADEIA ###
-      // Se pode capturar de novo, verifica se é único e agenda
       if (canCaptureAgain) {
         const uniqueMove = getUniqueCaptureMove(to.row, to.col, game);
         if (uniqueMove) {
-          // Delay de 1 segundo (1000ms)
           setTimeout(() => {
-            // Verifica se o jogo ainda existe e é o mesmo estado
             if (gameRooms[roomCode] && !gameRooms[roomCode].isGameConcluded) {
               executeMove(
                 roomCode,
@@ -343,7 +357,6 @@ function initializeSocket(io) {
         }
       }
     } else {
-      // Se veio de socket, avisa erro
       if (socketId) {
         const socket = io.sockets.sockets.get(socketId);
         if (socket) {
@@ -356,7 +369,6 @@ function initializeSocket(io) {
   }
 
   io.on("connection", (socket) => {
-    // ... (restante do código de conexão igual) ...
     console.log("Um novo usuário se conectou!", socket.id);
 
     socket.on("enterLobby", () => {
@@ -402,6 +414,10 @@ function initializeSocket(io) {
         return socket.emit("joinError", { message: "Erro ao criar sala." });
 
       socket.userData = data.user;
+
+      // ### CORREÇÃO: Limpa salas anteriores antes de criar ###
+      cleanupPreviousRooms(socket.userData.email);
+
       const { bet, gameMode, timerDuration, timeControl } = data;
       const validTimer = parseInt(timerDuration, 10) || 40;
       const validTimeControl =
@@ -420,20 +436,7 @@ function initializeSocket(io) {
         });
       }
 
-      const userEmail = socket.userData.email;
-      const existingRoom = Object.values(gameRooms).find(
-        (r) =>
-          r.players.length === 1 &&
-          !r.isGameConcluded &&
-          r.players[0].user.email === userEmail
-      );
-
-      if (existingRoom) {
-        return socket.emit("joinError", {
-          message:
-            "Você já tem uma sala aberta! Cancele a sala anterior primeiro.",
-        });
-      }
+      // Não precisamos mais verificar existingRoom e retornar erro, pois o cleanup já tratou disso.
 
       let roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
       while (gameRooms[roomCode]) {
@@ -466,6 +469,10 @@ function initializeSocket(io) {
     socket.on("joinRoomRequest", async (data) => {
       if (!data || !data.user || !data.roomCode) return;
       socket.userData = data.user;
+
+      // ### CORREÇÃO: Limpa salas anteriores se o usuário tentar entrar em outra ###
+      cleanupPreviousRooms(socket.userData.email);
+
       const { roomCode } = data;
       const room = gameRooms[roomCode];
       if (!room)
@@ -496,7 +503,14 @@ function initializeSocket(io) {
       socket.userData = data.user;
       const { roomCode } = data;
       const room = gameRooms[roomCode];
-      if (!room || room.players.length >= 2) return;
+      // Verifica se a sala ainda é válida e não está cheia
+      if (!room || room.players.length >= 2) {
+        socket.emit("joinError", {
+          message: "Sala indisponível ou já iniciada.",
+        });
+        return;
+      }
+
       if (room.disconnectTimeout) {
         clearTimeout(room.disconnectTimeout);
         room.disconnectTimeout = null;
@@ -537,7 +551,6 @@ function initializeSocket(io) {
       }
     });
 
-    // SUBSTITUINDO O LISTENER ANTIGO PELO NOVO QUE USA A FUNÇÃO CENTRALIZADA
     socket.on("playerMove", async (moveData) => {
       await executeMove(moveData.room, moveData.from, moveData.to, socket.id);
     });
