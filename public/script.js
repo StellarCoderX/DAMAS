@@ -88,6 +88,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const whitePlayerNameSpan = document.getElementById("white-player-name");
   const blackPlayerNameSpan = document.getElementById("black-player-name");
   const sendProofBtn = document.getElementById("send-proof-btn");
+  const refreshLobbyBtn = document.getElementById("refresh-lobby-btn");
 
   const socket = io({ autoConnect: false });
   let currentUser = null;
@@ -105,6 +106,29 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- VARIÁVEIS ANTI-TRAVAMENTO (WATCHDOG) ---
   let lastPacketTime = Date.now();
   let watchdogInterval = null;
+
+  // ### FUNÇÕES HELPER PARA O WATCHDOG ###
+  function startWatchdog() {
+    if (watchdogInterval) return; // Já está rodando, não duplica
+    console.log("Iniciando Watchdog de conexão...");
+    lastPacketTime = Date.now();
+    watchdogInterval = setInterval(() => {
+      // Aumentei tolerância para 5s e adicionei verificação se o jogo acabou
+      if (currentRoom && !isGameOver && Date.now() - lastPacketTime > 5000) {
+        console.warn("Watchdog: Solicitando sincronização...");
+        socket.emit("requestGameSync", { roomCode: currentRoom });
+        lastPacketTime = Date.now(); // Reseta para não spammar instantaneamente
+      }
+    }, 1000);
+  }
+
+  function stopWatchdog() {
+    if (watchdogInterval) {
+      clearInterval(watchdogInterval);
+      watchdogInterval = null;
+      console.log("Watchdog parado.");
+    }
+  }
 
   const urlParams = new URLSearchParams(window.location.search);
   const refCode = urlParams.get("ref");
@@ -298,6 +322,22 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  if (refreshLobbyBtn) {
+    refreshLobbyBtn.addEventListener("click", () => {
+      if (currentUser) {
+        socket.emit("enterLobby");
+        // Feedback visual
+        const originalText = refreshLobbyBtn.textContent;
+        refreshLobbyBtn.textContent = "Carregando...";
+        refreshLobbyBtn.disabled = true;
+        setTimeout(() => {
+          refreshLobbyBtn.textContent = originalText;
+          refreshLobbyBtn.disabled = false;
+        }, 1000);
+      }
+    });
+  }
+
   function updateTimerOptions() {
     timerSelect.innerHTML = "";
     const controlType = timeControlSelect.value;
@@ -371,10 +411,12 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.removeItem("checkersCurrentRoom");
     resetLobbyUI();
 
+    // ### ATUALIZADO: PARA O WATCHDOG AO SAIR ###
+    stopWatchdog();
+
     if (drawCooldownInterval) clearInterval(drawCooldownInterval);
     drawCooldownInterval = null;
-    if (watchdogInterval) clearInterval(watchdogInterval);
-    watchdogInterval = null;
+    if (nextGameInterval) clearInterval(nextGameInterval);
 
     if (drawBtn) {
       drawBtn.disabled = false;
@@ -693,6 +735,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   acceptBetBtn.addEventListener("click", () => {
     if (tempRoomCode && currentUser) {
+      // CORREÇÃO CRÍTICA: Força estado de NÃO espectador
+      isSpectator = false;
       socket.emit("acceptBet", { roomCode: tempRoomCode, user: currentUser });
       confirmBetOverlay.classList.add("hidden");
     }
@@ -958,6 +1002,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function selectPiece(pieceElement, row, col) {
     unselectPiece();
+    pieceElement.classList.add("selected");
     selectedPiece = { element: pieceElement, row, col };
     socket.emit("getValidMoves", { row, col, roomCode: currentRoom });
   }
@@ -969,60 +1014,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (selectedPiece) {
       selectedPiece.element.classList.remove("selected");
       selectedPiece = null;
-    }
-  }
-
-  // ### ATUALIZADO: Lógica de feedback visual e vibração ###
-  function updateGame(gameState, suppressSound = false) {
-    lastPacketTime = Date.now();
-
-    const oldPieceCount = boardState.flat().filter((p) => p !== 0).length;
-    const newPieceCount = gameState.boardState
-      .flat()
-      .filter((p) => p !== 0).length;
-
-    if (!suppressSound && newPieceCount > 0 && oldPieceCount > 0) {
-      if (newPieceCount < oldPieceCount) {
-        captureSound.currentTime = 0;
-        captureSound.play();
-      } else {
-        moveSound.currentTime = 0;
-        moveSound.play();
-      }
-    }
-
-    boardState = gameState.boardState;
-    renderPieces();
-    turnDisplay.textContent =
-      gameState.currentPlayer === "b" ? "Brancas" : "Pretas";
-
-    // 1. Aplica destaque da última jogada
-    document
-      .querySelectorAll(".last-move")
-      .forEach((el) => el.classList.remove("last-move"));
-    if (gameState.lastMove) {
-      const fromSq = document.querySelector(
-        `.square[data-row='${gameState.lastMove.from.row}'][data-col='${gameState.lastMove.from.col}']`
-      );
-      const toSq = document.querySelector(
-        `.square[data-row='${gameState.lastMove.to.row}'][data-col='${gameState.lastMove.to.col}']`
-      );
-      if (fromSq) fromSq.classList.add("last-move");
-      if (toSq) toSq.classList.add("last-move");
-    }
-
-    // 2. Feedback de Turno (Visual e Hápitco)
-    if (!isSpectator) {
-      const isMyTurn =
-        gameState.currentPlayer === (myColor === "b" ? "b" : "p");
-      if (isMyTurn) {
-        boardElement.classList.add("your-turn-active");
-        if (!suppressSound && navigator.vibrate) {
-          navigator.vibrate(200); // Vibra por 200ms
-        }
-      } else {
-        boardElement.classList.remove("your-turn-active");
-      }
     }
   }
 
@@ -1042,6 +1033,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // ### FUNÇÕES RESTAURADAS PARA CORRIGIR O ERRO ###
   function formatTime(seconds) {
     const min = Math.floor(seconds / 60);
     const sec = seconds % 60;
@@ -1052,9 +1044,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!users) return;
     const whiteName = users.white ? users.white.split("@")[0] : "Brancas";
     const blackName = users.black ? users.black.split("@")[0] : "Pretas";
-    whitePlayerNameSpan.textContent = whiteName;
-    blackPlayerNameSpan.textContent = blackName;
-    playersHud.classList.remove("hidden");
+    if (whitePlayerNameSpan) whitePlayerNameSpan.textContent = whiteName;
+    if (blackPlayerNameSpan) blackPlayerNameSpan.textContent = blackName;
+    if (playersHud) playersHud.classList.remove("hidden");
   }
 
   // --- SOCKET.IO EVENT HANDLERS ---
@@ -1087,6 +1079,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   socket.on("updateLobby", (data) => {
+    console.log("Recebida atualização do lobby:", data);
     renderOpenRooms(data.waiting);
     renderActiveRooms(data.active);
   });
@@ -1134,7 +1127,6 @@ document.addEventListener("DOMContentLoaded", () => {
     currentBoardSize = data.gameState.boardSize;
     createBoard();
 
-    // Passamos true aqui para não tocar som ao entrar como espectador
     updateGame(data.gameState, true);
     highlightMandatoryPieces(data.gameState.mandatoryPieces);
     updatePlayerNames(data.gameState.users);
@@ -1151,69 +1143,175 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // ### FUNÇÃO GAMESTART ATUALIZADA E BLINDADA ###
   socket.on("gameStart", (gameState) => {
-    if (isSpectator) return;
+    console.log("Evento GameStart Recebido!", gameState);
 
-    isGameOver = false;
-    overlay.classList.add("hidden");
-    winnerScreen.classList.add("hidden");
-    loserScreen.classList.add("hidden");
-    drawScreen.classList.add("hidden");
-    if (nextGameOverlay) nextGameOverlay.classList.add("hidden");
-    if (drawRequestOverlay) drawRequestOverlay.classList.add("hidden");
-
-    if (drawCooldownInterval) clearInterval(drawCooldownInterval);
-    drawCooldownInterval = null;
-    if (drawBtn) {
-      drawBtn.disabled = false;
-      drawBtn.textContent = "Empate";
+    if (
+      currentUser &&
+      gameState.users &&
+      (gameState.users.white === currentUser.email ||
+        gameState.users.black === currentUser.email)
+    ) {
+      isSpectator = false;
+      console.log("Identificado como jogador. Forçando isSpectator = false");
     }
-    if (nextGameInterval) clearInterval(nextGameInterval);
 
-    // --- INICIA WATCHDOG ---
-    lastPacketTime = Date.now();
-    if (watchdogInterval) clearInterval(watchdogInterval);
-    watchdogInterval = setInterval(() => {
-      // Se passar 3s sem receber nada e o jogo está ativo
-      if (currentRoom && !isGameOver && Date.now() - lastPacketTime > 3000) {
-        console.warn(
-          "Detectado possível travamento. Solicitando sincronização..."
-        );
-        socket.emit("requestGameSync", { roomCode: currentRoom });
-        // Reseta para não spammar
-        lastPacketTime = Date.now();
+    if (isSpectator) {
+      console.warn("Ignorando gameStart pois sou espectador.");
+      return;
+    }
+
+    try {
+      if (!gameState || !gameState.boardState) {
+        throw new Error("Estado do jogo inválido recebido do servidor.");
       }
-    }, 1000);
 
-    lobbyContainer.classList.add("hidden");
-    gameContainer.classList.remove("hidden");
+      isGameOver = false;
 
-    currentBoardSize = gameState.boardSize;
-    createBoard();
+      if (overlay) overlay.classList.add("hidden");
+      if (winnerScreen) winnerScreen.classList.add("hidden");
+      if (loserScreen) loserScreen.classList.add("hidden");
+      if (drawScreen) drawScreen.classList.add("hidden");
+      if (nextGameOverlay) nextGameOverlay.classList.add("hidden");
+      if (drawRequestOverlay) drawRequestOverlay.classList.add("hidden");
 
-    currentRoom = gameState.roomCode;
-    localStorage.setItem("checkersCurrentRoom", currentRoom);
-    myColor = socket.id === gameState.players.white ? "b" : "p";
+      if (drawCooldownInterval) clearInterval(drawCooldownInterval);
+      drawCooldownInterval = null;
+      if (drawBtn) {
+        drawBtn.disabled = false;
+        drawBtn.textContent = "Empate";
+      }
+      if (nextGameInterval) clearInterval(nextGameInterval);
 
-    let statusText = `Você joga com as ${
-      myColor === "b" ? "Brancas" : "Pretas"
-    }.`;
-    if (gameState.openingName) {
-      statusText += `<br><span style="font-size: 0.9em; color: #f39c12;">Sorteio: ${gameState.openingName}</span>`;
+      // ### ALTERAÇÃO: NÃO INICIA WATCHDOG AQUI PARA EVITAR SPAM ANTES DO JOGO COMEÇAR ###
+      stopWatchdog();
+
+      if (lobbyContainer) lobbyContainer.classList.add("hidden");
+      if (gameContainer) gameContainer.classList.remove("hidden");
+
+      currentBoardSize = gameState.boardSize;
+      createBoard();
+
+      currentRoom = gameState.roomCode;
+      localStorage.setItem("checkersCurrentRoom", currentRoom);
+
+      myColor = socket.id === gameState.players.white ? "b" : "p";
+
+      let statusText = `Você joga com as ${
+        myColor === "b" ? "Brancas" : "Pretas"
+      }.`;
+      if (gameState.openingName) {
+        statusText += `<br><span style="font-size: 0.9em; color: #f39c12;">Sorteio: ${gameState.openingName}</span>`;
+      }
+      if (gameStatus) gameStatus.innerHTML = statusText;
+
+      if (boardElement) {
+        boardElement.classList.remove("board-flipped");
+        if (myColor === "p") {
+          boardElement.classList.add("board-flipped");
+        }
+      }
+
+      updateGame(gameState, true);
+      highlightMandatoryPieces(gameState.mandatoryPieces);
+      updatePlayerNames(gameState.users);
+    } catch (e) {
+      console.error("ERRO CRÍTICO NO GAMESTART:", e);
+      alert(`Erro ao iniciar: ${e.message}. Tente recarregar a página.`);
+      returnToLobby();
     }
-    gameStatus.innerHTML = statusText;
-
-    boardElement.classList.remove("board-flipped");
-    if (myColor === "p") {
-      boardElement.classList.add("board-flipped");
-    }
-    updateGame(gameState);
-    highlightMandatoryPieces(gameState.mandatoryPieces);
-    updatePlayerNames(gameState.users);
   });
 
+  // ### FUNÇÃO UPDATEGAME ATUALIZADA E BLINDADA ###
+  function updateGame(gameState, suppressSound = false) {
+    if (!gameState || !gameState.boardState) return;
+
+    lastPacketTime = Date.now();
+
+    let oldPieceCount = 0;
+    if (Array.isArray(boardState)) {
+      boardState.forEach((row) => {
+        if (Array.isArray(row)) {
+          row.forEach((p) => {
+            if (p !== 0) oldPieceCount++;
+          });
+        }
+      });
+    }
+
+    let newPieceCount = 0;
+    if (Array.isArray(gameState.boardState)) {
+      gameState.boardState.forEach((row) => {
+        if (Array.isArray(row)) {
+          row.forEach((p) => {
+            if (p !== 0) newPieceCount++;
+          });
+        }
+      });
+    }
+
+    if (!suppressSound && newPieceCount > 0 && oldPieceCount > 0) {
+      if (newPieceCount < oldPieceCount) {
+        if (captureSound) {
+          captureSound.currentTime = 0;
+          captureSound
+            .play()
+            .catch((e) => console.log("Áudio bloqueado (Capture):", e));
+        }
+      } else {
+        if (moveSound) {
+          moveSound.currentTime = 0;
+          moveSound
+            .play()
+            .catch((e) => console.log("Áudio bloqueado (Move):", e));
+        }
+      }
+    }
+
+    boardState = gameState.boardState;
+    renderPieces();
+
+    if (turnDisplay) {
+      turnDisplay.textContent =
+        gameState.currentPlayer === "b" ? "Brancas" : "Pretas";
+    }
+
+    document
+      .querySelectorAll(".last-move")
+      .forEach((el) => el.classList.remove("last-move"));
+    if (gameState.lastMove) {
+      const fromSq = document.querySelector(
+        `.square[data-row='${gameState.lastMove.from.row}'][data-col='${gameState.lastMove.from.col}']`
+      );
+      const toSq = document.querySelector(
+        `.square[data-row='${gameState.lastMove.to.row}'][data-col='${gameState.lastMove.to.col}']`
+      );
+      if (fromSq) fromSq.classList.add("last-move");
+      if (toSq) toSq.classList.add("last-move");
+    }
+
+    if (!isSpectator && boardElement) {
+      const isMyTurn =
+        gameState.currentPlayer === (myColor === "b" ? "b" : "p");
+      if (isMyTurn) {
+        boardElement.classList.add("your-turn-active");
+        if (!suppressSound && navigator && navigator.vibrate) {
+          try {
+            navigator.vibrate(200);
+          } catch (e) {}
+        }
+      } else {
+        boardElement.classList.remove("your-turn-active");
+      }
+    }
+  }
+
   socket.on("timerUpdate", (data) => {
-    lastPacketTime = Date.now(); // Watchdog update
+    lastPacketTime = Date.now();
+
+    // ### ALTERAÇÃO: INICIA WATCHDOG APENAS QUANDO O TEMPO COMEÇA A CONTAR ###
+    startWatchdog();
 
     if (data.timeLeft !== undefined) {
       timerDisplay.textContent = data.timeLeft + "s";
@@ -1251,7 +1349,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   socket.on("gameResumed", (data) => {
-    lastPacketTime = Date.now(); // Watchdog update
+    lastPacketTime = Date.now();
     if (isSpectator) return;
 
     connectionLostOverlay.classList.add("hidden");
@@ -1259,7 +1357,6 @@ document.addEventListener("DOMContentLoaded", () => {
     currentBoardSize = data.gameState.boardSize;
     createBoard();
 
-    // ### CORREÇÃO AQUI: Passa true para suprimir som no sync ###
     updateGame(data.gameState, true);
     updatePlayerNames(data.gameState.users);
 
@@ -1284,7 +1381,9 @@ document.addEventListener("DOMContentLoaded", () => {
   socket.on("gameOver", (data) => {
     if (isGameOver) return;
     isGameOver = true;
-    if (watchdogInterval) clearInterval(watchdogInterval); // Para watchdog
+
+    // ### ATUALIZADO: PARA O WATCHDOG AO TERMINAR ###
+    stopWatchdog();
 
     connectionLostOverlay.classList.add("hidden");
     if (drawCooldownInterval) clearInterval(drawCooldownInterval);
@@ -1308,7 +1407,9 @@ document.addEventListener("DOMContentLoaded", () => {
   socket.on("gameDraw", (data) => {
     if (isGameOver) return;
     isGameOver = true;
-    if (watchdogInterval) clearInterval(watchdogInterval);
+
+    // ### ATUALIZADO: PARA O WATCHDOG AO TERMINAR ###
+    stopWatchdog();
 
     connectionLostOverlay.classList.add("hidden");
     if (drawCooldownInterval) clearInterval(drawCooldownInterval);
