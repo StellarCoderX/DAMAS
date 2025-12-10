@@ -139,12 +139,8 @@
           ">
         <label for="timer-select">Tempo por Jogada:</label>
         <select id="timer-select" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc">
-          <option value="5">5 segundos</option>
-          <option value="10">10 segundos</option>
-          <option value="30">30 segundos</option>
-          <option value="40" selected>40 segundos</option>
-          <option value="60">1 minuto</option>
-          <option value="90">1 min e 30 seg</option>
+          <!-- OPÇÕES SERÃO POPULADAS PELO SCRIPT.JS -->
+          <!-- A opção de 7 segundos será adicionada lá -->
         </select>
       </div>
 
@@ -183,7 +179,6 @@
       👀 MODO ESPECTADOR
     </div>
 
-    <!-- NOVA ÁREA: HUD DOS JOGADORES -->
     <div id="players-hud" class="players-hud hidden">
       <div class="player-badge white-player">
         <div class="piece-icon white-piece-icon"></div>
@@ -313,11 +308,11 @@
       </div>
       <button id="copy-pix-key-btn">Copiar Chave</button>
       <p class="instructions">
-        Após o pagamento, envie o comprovative e o seu Email para o nosso WhatsApp para que
+        Após o pagamento, envie o comprovante e o seu Email para o nosso WhatsApp para que
         o saldo seja adicionado à sua conta.
       </p>
-      <a href="https://wa.me/5571920007957?text=Ol%C3%A1%21%20Estou%20enviando%20o%20comprovativo%20do%20meu%20pagamento%20PIX."
-        target="_blank" class="whatsapp-link">Enviar Comprovante!</a>
+      <!-- LINK DO WHATSAPP ATUALIZADO COM ID PARA EDIÇÃO NO JS -->
+      <a href="#" id="send-proof-btn" target="_blank" class="whatsapp-link">Enviar Comprovante!</a>
       <button id="close-pix-overlay-btn">Fechar</button>
     </div>
   </div>

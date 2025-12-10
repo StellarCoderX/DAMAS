@@ -1,4 +1,4 @@
-// src/socketHandlers.js (CORREÇÃO: LIMPEZA AUTOMÁTICA DE SALAS FANTASMAS)
+// src/socketHandlers.js (COM FUNÇÃO ANTI-TRAVAMENTO / SINCRONIZAÇÃO)
 
 const User = require("../models/User");
 const {
@@ -46,13 +46,10 @@ function getLobbyInfo() {
 }
 
 function initializeSocket(io) {
-  // --- FUNÇÃO AUXILIAR DE LIMPEZA ---
-  // Remove qualquer sala de espera que este usuário tenha criado anteriormente
   function cleanupPreviousRooms(userEmail) {
     const roomsToRemove = [];
     Object.keys(gameRooms).forEach((code) => {
       const r = gameRooms[code];
-      // Verifica se a sala tem apenas 1 jogador (espera) e se o criador é o usuário atual
       if (
         r.players.length === 1 &&
         !r.isGameConcluded &&
@@ -415,7 +412,6 @@ function initializeSocket(io) {
 
       socket.userData = data.user;
 
-      // ### CORREÇÃO: Limpa salas anteriores antes de criar ###
       cleanupPreviousRooms(socket.userData.email);
 
       const { bet, gameMode, timerDuration, timeControl } = data;
@@ -435,8 +431,6 @@ function initializeSocket(io) {
           message: `Saldo insuficiente. Você tem ${saldoAtual}, precisa de ${bet}.`,
         });
       }
-
-      // Não precisamos mais verificar existingRoom e retornar erro, pois o cleanup já tratou disso.
 
       let roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
       while (gameRooms[roomCode]) {
@@ -470,7 +464,6 @@ function initializeSocket(io) {
       if (!data || !data.user || !data.roomCode) return;
       socket.userData = data.user;
 
-      // ### CORREÇÃO: Limpa salas anteriores se o usuário tentar entrar em outra ###
       cleanupPreviousRooms(socket.userData.email);
 
       const { roomCode } = data;
@@ -502,8 +495,6 @@ function initializeSocket(io) {
       if (!data || !data.user) return;
       socket.userData = data.user;
       const { roomCode } = data;
-      const room = gameRooms[roomCode];
-      // Verifica se a sala ainda é válida e não está cheia
       if (!room || room.players.length >= 2) {
         socket.emit("joinError", {
           message: "Sala indisponível ou já iniciada.",
@@ -535,6 +526,41 @@ function initializeSocket(io) {
       }
       await startGameLogic(room);
       io.emit("updateLobby", getLobbyInfo());
+    });
+
+    // ### NOVA FUNÇÃO: SINCRONIZAÇÃO DE JOGO (ANTI-TRAVAMENTO) ###
+    socket.on("requestGameSync", (data) => {
+      const { roomCode } = data;
+      const room = gameRooms[roomCode];
+      if (!room || !room.game) return;
+
+      // Verifica se o jogador está na sala
+      const isPlayer = room.players.some((p) => p.socketId === socket.id);
+      if (!isPlayer) return;
+
+      // Atualiza o socketId do jogador se tiver mudado (ex: reconexão silenciosa)
+      const player = room.players.find(
+        (p) => p.user.email === socket.userData?.email
+      );
+      if (player) player.socketId = socket.id;
+
+      // Prepara os dados de tempo
+      let timeData = {};
+      if (room.timeControl === "match") {
+        timeData = { whiteTime: room.whiteTime, blackTime: room.blackTime };
+      } else {
+        timeData = { timeLeft: room.timeLeft };
+      }
+
+      // Envia o estado completo para o solicitante
+      socket.emit("gameResumed", {
+        gameState: room.game,
+        ...timeData,
+      });
+
+      console.log(
+        `[Sync] Jogo sincronizado para sala ${roomCode} a pedido de ${socket.id}`
+      );
     });
 
     socket.on("cancelRoom", (data) => {

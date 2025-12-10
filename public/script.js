@@ -78,19 +78,16 @@ document.addEventListener("DOMContentLoaded", () => {
     "close-referrals-overlay-btn"
   );
   const referralsList = document.getElementById("referrals-list");
-
-  // --- NOVOS ELEMENTOS DE HISTÓRICO ---
   const viewHistoryBtn = document.getElementById("view-history-btn");
   const historyOverlay = document.getElementById("history-overlay");
   const closeHistoryOverlayBtn = document.getElementById(
     "close-history-overlay-btn"
   );
   const historyList = document.getElementById("history-list");
-
-  // --- NOVOS ELEMENTOS DO HUD DE JOGADORES ---
   const playersHud = document.getElementById("players-hud");
   const whitePlayerNameSpan = document.getElementById("white-player-name");
   const blackPlayerNameSpan = document.getElementById("black-player-name");
+  const sendProofBtn = document.getElementById("send-proof-btn");
 
   const socket = io({ autoConnect: false });
   let currentUser = null;
@@ -104,6 +101,10 @@ document.addEventListener("DOMContentLoaded", () => {
   let isGameOver = false;
   let drawCooldownInterval = null;
   let isSpectator = false;
+
+  // --- VARIÁVEIS ANTI-TRAVAMENTO (WATCHDOG) ---
+  let lastPacketTime = Date.now();
+  let watchdogInterval = null;
 
   const urlParams = new URLSearchParams(window.location.search);
   const refCode = urlParams.get("ref");
@@ -167,12 +168,10 @@ document.addEventListener("DOMContentLoaded", () => {
               resultText = "Derrota";
             }
 
-            // Identificar oponente
             const opponent =
               match.player1 === currentUser.email
                 ? match.player2
                 : match.player1;
-            // Formatar data
             const date = new Date(match.createdAt).toLocaleDateString("pt-BR", {
               day: "2-digit",
               month: "2-digit",
@@ -206,7 +205,6 @@ document.addEventListener("DOMContentLoaded", () => {
       historyOverlay.classList.add("hidden");
     });
   }
-  // --- FIM DA LÓGICA DE HISTÓRICO ---
 
   if (copyReferralBtn) {
     copyReferralBtn.addEventListener("click", () => {
@@ -307,11 +305,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (controlType === "move") {
       const options = [
         { val: 5, label: "5 segundos" },
-        { val: 10, label: "10 segundos" },
+        { val: 7, label: "7 segundos" },
         { val: 30, label: "30 segundos" },
         { val: 40, label: "40 segundos" },
-        { val: 60, label: "1 minuto" },
-        { val: 90, label: "1 min e 30 seg" },
       ];
       options.forEach((opt) => {
         const option = document.createElement("option");
@@ -324,8 +320,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const options = [
         { val: 40, label: "40 segundos" },
         { val: 60, label: "1 minuto" },
-        { val: 180, label: "3 minutos" },
-        { val: 300, label: "5 minutos" },
       ];
       options.forEach((opt) => {
         const option = document.createElement("option");
@@ -366,7 +360,7 @@ document.addEventListener("DOMContentLoaded", () => {
     spectatorLeaveBtn.classList.add("hidden");
     resignBtn.classList.remove("hidden");
     drawBtn.classList.remove("hidden");
-    playersHud.classList.add("hidden"); // Oculta nomes ao sair
+    playersHud.classList.add("hidden");
 
     lobbyContainer.classList.remove("hidden");
     boardElement.classList.remove("board-flipped");
@@ -379,6 +373,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (drawCooldownInterval) clearInterval(drawCooldownInterval);
     drawCooldownInterval = null;
+    if (watchdogInterval) clearInterval(watchdogInterval);
+    watchdogInterval = null;
+
     if (drawBtn) {
       drawBtn.disabled = false;
       drawBtn.textContent = "Empate";
@@ -531,6 +528,45 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  if (addBalanceBtn) {
+    addBalanceBtn.addEventListener("click", () => {
+      pixOverlay.classList.remove("hidden");
+
+      if (currentUser && sendProofBtn) {
+        const userEmail = currentUser.email;
+        const message = `Olá! Estou enviando o comprovativo do meu pagamento PIX. Meu email e ${userEmail}`;
+        const encodedMessage = encodeURIComponent(message);
+        sendProofBtn.href = `https://wa.me/5571920007957?text=${encodedMessage}`;
+      }
+    });
+  }
+
+  if (closePixOverlayBtn) {
+    closePixOverlayBtn.addEventListener("click", () => {
+      pixOverlay.classList.add("hidden");
+    });
+  }
+
+  if (copyPixKeyBtn) {
+    copyPixKeyBtn.addEventListener("click", () => {
+      const pixKey = document.getElementById("pix-key").textContent;
+      const tempInput = document.createElement("input");
+      document.body.appendChild(tempInput);
+      tempInput.value = pixKey;
+      tempInput.select();
+      try {
+        document.execCommand("copy");
+        copyPixKeyBtn.textContent = "Copiado!";
+        setTimeout(() => {
+          copyPixKeyBtn.textContent = "Copiar Chave";
+        }, 2000);
+      } catch (err) {
+        alert("Não foi possível copiar a chave. Por favor, copie manually.");
+      }
+      document.body.removeChild(tempInput);
+    });
+  }
+
   if (withdrawBtn) {
     withdrawBtn.addEventListener("click", () => {
       withdrawOverlay.classList.remove("hidden");
@@ -550,16 +586,15 @@ document.addEventListener("DOMContentLoaded", () => {
       const pixKey = document.getElementById("withdraw-pix-key").value;
       const amount = parseFloat(
         document.getElementById("withdraw-amount").value
-      ); // Converte para número
+      );
 
       if (!pixKey || !amount) return;
 
-      // VALIDACAO DO VALOR MINIMO (30 REAIS)
       if (amount < 30) {
         withdrawMessage.textContent =
           "O valor mínimo para retirada é de R$ 30,00.";
         withdrawMessage.style.color = "orange";
-        return; // Impede o envio
+        return;
       }
 
       try {
@@ -654,32 +689,6 @@ document.addEventListener("DOMContentLoaded", () => {
         socket.emit("joinAsSpectator", { roomCode });
       }
     }
-  });
-
-  addBalanceBtn.addEventListener("click", () => {
-    pixOverlay.classList.remove("hidden");
-  });
-
-  closePixOverlayBtn.addEventListener("click", () => {
-    pixOverlay.classList.add("hidden");
-  });
-
-  copyPixKeyBtn.addEventListener("click", () => {
-    const pixKey = document.getElementById("pix-key").textContent;
-    const tempInput = document.createElement("input");
-    document.body.appendChild(tempInput);
-    tempInput.value = pixKey;
-    tempInput.select();
-    try {
-      document.execCommand("copy");
-      copyPixKeyBtn.textContent = "Copiado!";
-      setTimeout(() => {
-        copyPixKeyBtn.textContent = "Copiar Chave";
-      }, 2000);
-    } catch (err) {
-      alert("Não foi possível copiar a chave. Por favor, copie manually.");
-    }
-    document.body.removeChild(tempInput);
   });
 
   acceptBetBtn.addEventListener("click", () => {
@@ -964,6 +973,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function updateGame(gameState) {
+    // Atualiza Watchdog sempre que recebe estado
+    lastPacketTime = Date.now();
+
     const oldPieceCount = boardState.flat().filter((p) => p !== 0).length;
     const newPieceCount = gameState.boardState
       .flat()
@@ -1007,7 +1019,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${min}:${sec < 10 ? "0" : ""}${sec}`;
   }
 
-  // --- Função auxiliar para atualizar nomes dos jogadores ---
   function updatePlayerNames(users) {
     if (!users) return;
     const whiteName = users.white ? users.white.split("@")[0] : "Brancas";
@@ -1129,6 +1140,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (nextGameInterval) clearInterval(nextGameInterval);
 
+    // --- INICIA WATCHDOG ---
+    lastPacketTime = Date.now();
+    if (watchdogInterval) clearInterval(watchdogInterval);
+    watchdogInterval = setInterval(() => {
+      // Se passar 3s sem receber nada e o jogo está ativo
+      if (currentRoom && !isGameOver && Date.now() - lastPacketTime > 3000) {
+        console.warn(
+          "Detectado possível travamento. Solicitando sincronização..."
+        );
+        socket.emit("requestGameSync", { roomCode: currentRoom });
+        // Reseta para não spammar
+        lastPacketTime = Date.now();
+      }
+    }, 1000);
+
     lobbyContainer.classList.add("hidden");
     gameContainer.classList.remove("hidden");
 
@@ -1157,6 +1183,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   socket.on("timerUpdate", (data) => {
+    lastPacketTime = Date.now(); // Watchdog update
+
     if (data.timeLeft !== undefined) {
       timerDisplay.textContent = data.timeLeft + "s";
     } else if (data.whiteTime !== undefined && data.blackTime !== undefined) {
@@ -1169,6 +1197,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   socket.on("timerPaused", (data) => {
+    lastPacketTime = Date.now();
     if (data.timeLeft !== undefined) {
       timerDisplay.textContent = `${data.timeLeft}s (Pausado)`;
     } else {
@@ -1192,6 +1221,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   socket.on("gameResumed", (data) => {
+    lastPacketTime = Date.now(); // Watchdog update
     if (isSpectator) return;
 
     connectionLostOverlay.classList.add("hidden");
@@ -1223,6 +1253,8 @@ document.addEventListener("DOMContentLoaded", () => {
   socket.on("gameOver", (data) => {
     if (isGameOver) return;
     isGameOver = true;
+    if (watchdogInterval) clearInterval(watchdogInterval); // Para watchdog
+
     connectionLostOverlay.classList.add("hidden");
     if (drawCooldownInterval) clearInterval(drawCooldownInterval);
     drawBtn.disabled = true;
@@ -1245,6 +1277,8 @@ document.addEventListener("DOMContentLoaded", () => {
   socket.on("gameDraw", (data) => {
     if (isGameOver) return;
     isGameOver = true;
+    if (watchdogInterval) clearInterval(watchdogInterval);
+
     connectionLostOverlay.classList.add("hidden");
     if (drawCooldownInterval) clearInterval(drawCooldownInterval);
     drawBtn.disabled = true;
