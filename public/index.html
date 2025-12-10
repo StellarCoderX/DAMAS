@@ -51,19 +51,11 @@
         <li>Pode capturar para trás.</li>
         <li>Não existe sopro.</li>
         <li>Pedra e Dama tem o mesmo valor para capturar e ser capturada.</li>
-        <li>
-          Só de passar pela casa de coração a pedra NÃO se transforma em Dama.
-        </li>
-        <li>
-          É permitido passar pela mesma casa mais de uma vez na captura.
-        </li>
+        <li>Só de passar pela casa de coração a pedra NÃO se transforma em Dama.</li>
+        <li>É permitido passar pela mesma casa mais de uma vez na captura.</li>
         <li>NÃO pode capturar a mesma Peça mais de uma vez.</li>
-        <li>
-          Primeiro efetua o movimento de captura, depois retira-se as peças.
-        </li>
-        <li>
-          O ganho acontece quando se captura todas as peças do adversário ou
-          quando o seu oponente não tem onde mexer.
+        <li>Primeiro efetua o movimento de captura, depois retira-se as peças.</li>
+        <li>O ganho acontece quando se captura todas as peças do adversário ou quando o seu oponente não tem onde mexer.
         </li>
       </ul>
     </div>
@@ -164,7 +156,11 @@
     </div>
 
     <div class="lobby-section" id="open-rooms-section">
-      <h3>Salas Abertas</h3>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3>Salas Abertas</h3>
+        <button id="refresh-lobby-btn"
+          style="width: auto; padding: 5px 10px; font-size: 0.8em; background-color: #3498db;">Atualizar 🔄</button>
+      </div>
       <div id="open-rooms-list">
         <p>A carregar salas...</p>
       </div>
@@ -315,7 +311,8 @@
         <p>
           <strong>Chave:</strong>
           <span
-            id="pix-key">00020126580014br.gov.bcb.pix01362b3485a0-d28c-4d37-9b5d-b2efcac4cee65204000053039865802BR5919TIAGO SOUZA SANTANA6008Salvador6211050726f78796304D315</span>
+            id="pix-key">00020126580014br.gov.bcb.pix01362b3485a0-d28c-4d37-9b5d-b2efcac4cee65204000053039865802BR5919TIAGO
+            SOUZA SANTANA6008Salvador6211050726f78796304D315</span>
         </p>
         <p><strong>Nome:</strong> Tiago Souza Santana</p>
       </div>
@@ -377,6 +374,10 @@
   <audio id="capture-sound" src="/sounds/capture.mp3" preload="auto"></audio>
 
   <script src="/socket.io/socket.io.js"></script>
+
+  <!-- ### ALTERAÇÃO: Lógica Unificada e Helpers ### -->
+  <script src="gameLogic.js"></script>
+  <script src="ui-helpers.js"></script>
   <script src="script.js"></script>
 </body>
 

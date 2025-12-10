@@ -1,7 +1,9 @@
-// src/gameManager.js (COM HISTÓRICO DE PARTIDAS)
+// src/gameManager.js (COM HISTÓRICO DE PARTIDAS E IMPORT UNIFICADO)
 const User = require("../models/User");
-const MatchHistory = require("../models/MatchHistory"); // Importando o novo modelo
-const { findBestCaptureMoves } = require("./gameLogic");
+const MatchHistory = require("../models/MatchHistory");
+
+// ### IMPORTAÇÃO DO ARQUIVO COMPARTILHADO ###
+const { findBestCaptureMoves } = require("../public/gameLogic");
 
 let io;
 let gameRooms;
@@ -17,8 +19,7 @@ function startTimer(roomCode) {
   if (room.timerInterval) clearInterval(room.timerInterval);
 
   if (room.timeControl === "match") {
-    // --- MODO POR PARTIDA (BLITZ) ---
-    const currentPlayerColor = room.game.currentPlayer; // 'b' ou 'p'
+    const currentPlayerColor = room.game.currentPlayer;
 
     room.timerInterval = setInterval(() => {
       if (!gameRooms[roomCode]) {
@@ -49,7 +50,6 @@ function startTimer(roomCode) {
       }
     }, 1000);
   } else {
-    // --- MODO POR JOGADA (PADRÃO) ---
     io.to(roomCode).emit("timerUpdate", { timeLeft: room.timeLeft });
 
     room.timerInterval = setInterval(() => {
@@ -84,19 +84,15 @@ function resetTimer(roomCode) {
   }
 }
 
-// Função auxiliar para salvar histórico
 async function saveMatchHistory(room, winnerEmail, reason) {
   try {
     const p1Email = room.players[0].user.email;
     const p2Email = room.players[1].user.email;
 
-    // Se for tablita, usamos o match.score para verificar quem é quem, mas a sala já tem os players
-    // Se não houver winnerEmail, é empate (null)
-
     const history = new MatchHistory({
       player1: p1Email,
       player2: p2Email,
-      winner: winnerEmail || null, // null se empate
+      winner: winnerEmail || null,
       bet: room.bet,
       gameMode: room.gameMode,
       reason: reason,
@@ -122,10 +118,8 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
   room.drawOfferBy = null;
   io.to(room.roomCode).emit("drawOfferCancelled");
 
-  // --- MODO CLÁSSICO / INTERNACIONAL ---
   if (!room.isTablita) {
     if (!winnerColor) {
-      // EMPATE
       try {
         await User.findOneAndUpdate(
           { email: room.players[0].user.email },
@@ -137,13 +131,11 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
         );
         io.to(room.roomCode).emit("gameDraw", { reason });
 
-        // Salvar Histórico (Empate)
         await saveMatchHistory(room, null, reason);
       } catch (err) {
         console.error("Erro ao processar empate clássico:", err);
       }
     } else {
-      // VITÓRIA
       const winnerSocketId =
         room.game.players[winnerColor === "b" ? "white" : "black"];
       const winnerData = room.players.find(
@@ -166,7 +158,6 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
             winnerSocket.emit("updateSaldo", { newSaldo: updatedWinner.saldo });
           }
 
-          // Salvar Histórico (Vitória)
           await saveMatchHistory(room, winnerData.user.email, reason);
         } catch (err) {
           console.error("Erro ao pagar prêmio clássico:", err);
@@ -179,7 +170,6 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
     return;
   }
 
-  // --- LÓGICA DO MODO TABLITA ---
   if (winnerColor) {
     const winnerSocketId =
       room.game.players[winnerColor === "b" ? "white" : "black"];
@@ -203,7 +193,6 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
     else if (p2Score > p1Score) finalWinnerData = room.match.player2;
 
     if (finalWinnerData) {
-      // VENCEDOR TABLITA FINAL
       try {
         const prize = room.bet * 2;
         const updatedWinner = await User.findOneAndUpdate(
@@ -225,13 +214,11 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
           winnerSocket.emit("updateSaldo", { newSaldo: updatedWinner.saldo });
         }
 
-        // Salvar Histórico (Vitória Tablita)
         await saveMatchHistory(room, finalWinnerData.email, finalReason);
       } catch (err) {
         console.error("Erro ao pagar prêmio Tablita:", err);
       }
     } else {
-      // EMPATE TABLITA FINAL
       try {
         await User.findOneAndUpdate(
           { email: p1Email },
@@ -248,7 +235,6 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
           reason: finalReason,
         });
 
-        // Salvar Histórico (Empate Tablita)
         await saveMatchHistory(room, null, finalReason);
       } catch (err) {
         console.error("Erro ao devolver aposta em empate Tablita:", err);
@@ -258,7 +244,6 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
       if (gameRooms[room.roomCode]) delete gameRooms[room.roomCode];
     }, 60000);
   } else {
-    // Continua para o próximo jogo da Tablita
     room.match.currentGame++;
     const scoreArray = [p1Score, p2Score];
     const nextGameTitle = `Fim da 1ª Partida!`;

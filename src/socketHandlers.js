@@ -1,4 +1,4 @@
-// src/socketHandlers.js (CORREÇÃO CRÍTICA DE INÍCIO DE JOGO)
+// src/socketHandlers.js (CORRIGIDO PARA USAR LÓGICA COMPARTILHADA)
 
 const User = require("../models/User");
 const {
@@ -6,6 +6,8 @@ const {
   idfTablitaOpenings,
   standardOpening10x10,
 } = require("../utils/constants");
+
+// ### IMPORTAÇÃO DO ARQUIVO COMPARTILHADO ###
 const {
   isMoveValid,
   checkWinCondition,
@@ -13,7 +15,8 @@ const {
   getAllPossibleCapturesForPiece,
   findBestCaptureMoves,
   getUniqueCaptureMove,
-} = require("./gameLogic");
+} = require("../public/gameLogic"); // Caminho atualizado para a pasta public
+
 const { startTimer, resetTimer, processEndOfGame } = require("./gameManager");
 
 const gameRooms = {};
@@ -26,7 +29,7 @@ function getLobbyInfo() {
       bet: room.bet,
       gameMode: room.gameMode,
       timeControl: room.timeControl,
-      creatorEmail: room.players[0]?.user?.email || "Desconhecido", // Proteção ?.
+      creatorEmail: room.players[0]?.user?.email || "Desconhecido",
       timerDuration: room.timerDuration,
     }));
 
@@ -37,8 +40,8 @@ function getLobbyInfo() {
       bet: room.bet,
       gameMode: room.gameMode,
       timeControl: room.timeControl,
-      player1Email: room.players[0]?.user?.email || "P1", // Proteção ?.
-      player2Email: room.players[1]?.user?.email || "P2", // Proteção ?.
+      player1Email: room.players[0]?.user?.email || "P1",
+      player2Email: room.players[1]?.user?.email || "P2",
       timerDuration: room.timerDuration,
     }));
 
@@ -185,17 +188,9 @@ function initializeSocket(io) {
       mandatoryPieces,
     };
 
-    // ### CORREÇÃO CRÍTICA: ENVIO REDUNDANTE ###
-    // Envia para a sala (padrão)
     io.to(room.roomCode).emit("gameStart", gameState);
-
-    // Envia DIRETAMENTE para os sockets dos jogadores (Garantia de entrega)
     io.to(whitePlayer.socketId).emit("gameStart", gameState);
     io.to(blackPlayer.socketId).emit("gameStart", gameState);
-
-    console.log(
-      `[GameStart] Enviado para sala ${room.roomCode} e jogadores individuais.`
-    );
   }
 
   async function executeMove(roomCode, from, to, socketId) {
@@ -380,8 +375,6 @@ function initializeSocket(io) {
   }
 
   io.on("connection", (socket) => {
-    console.log("Um novo usuário se conectou!", socket.id);
-
     socket.on("enterLobby", () => {
       socket.emit("updateLobby", getLobbyInfo());
     });
@@ -569,10 +562,6 @@ function initializeSocket(io) {
         gameState: room.game,
         ...timeData,
       });
-
-      console.log(
-        `[Sync] Jogo sincronizado para sala ${roomCode} a pedido de ${socket.id}`
-      );
     });
 
     socket.on("cancelRoom", (data) => {
@@ -680,9 +669,6 @@ function initializeSocket(io) {
         return;
       }
       if (room.disconnectTimeout) {
-        console.log(
-          `[Reconexão] Jogador ${user.email} voltou a tempo para a sala ${roomCode}.`
-        );
         clearTimeout(room.disconnectTimeout);
         room.disconnectTimeout = null;
       }
@@ -709,13 +695,10 @@ function initializeSocket(io) {
         });
 
         startTimer(roomCode);
-
-        console.log(`Jogador ${user.email} reconectado à sala ${roomCode}`);
       }
     });
 
     socket.on("disconnect", () => {
-      console.log("Usuário desconectado", socket.id);
       const WAIT_TIME = 60;
 
       const roomCode = Object.keys(gameRooms).find((rc) =>
