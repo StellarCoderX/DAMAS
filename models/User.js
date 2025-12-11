@@ -17,7 +17,16 @@ const UserSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
-  // --- NOVOS CAMPOS PARA INDICAÇÃO ---
+  // --- NOVOS CAMPOS DE PERFIL ---
+  username: {
+    type: String,
+    default: "", // Vazio por padrão, usuário define depois
+  },
+  avatar: {
+    type: String,
+    default: "", // URL da imagem
+  },
+  // --- CAMPOS PARA INDICAÇÃO ---
   referredBy: {
     type: String, // Email de quem indicou este usuário
     default: null,
@@ -27,7 +36,6 @@ const UserSchema = new mongoose.Schema({
     default: false,
   },
   firstDepositValue: {
-    // NOVO: Armazena o valor do primeiro depósito para histórico
     type: Number,
     default: 0,
   },

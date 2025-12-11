@@ -170,6 +170,87 @@ window.initLobby = function (socket, UI) {
     });
   }
 
+  // --- LÓGICA DE PERFIL (NOVO) ---
+  const openProfileBtn = document.getElementById("open-profile-btn");
+  const closeProfileBtn = document.getElementById("close-profile-btn");
+  const saveProfileBtn = document.getElementById("save-profile-btn");
+  const profileOverlay = document.getElementById("profile-overlay");
+  const avatarInput = document.getElementById("profile-avatar-input");
+  const usernameInput = document.getElementById("profile-username-input");
+  const profilePreview = document.getElementById("profile-preview-img");
+  const profileMsg = document.getElementById("profile-message");
+
+  if (openProfileBtn) {
+    openProfileBtn.addEventListener("click", () => {
+      if (!window.currentUser) return;
+      profileOverlay.classList.remove("hidden");
+      usernameInput.value = window.currentUser.username || "";
+      avatarInput.value = window.currentUser.avatar || "";
+      profilePreview.src = window.currentUser.avatar || "";
+      if (!window.currentUser.avatar) profilePreview.style.display = "none";
+      else profilePreview.style.display = "inline-block";
+      profileMsg.textContent = "";
+    });
+  }
+
+  if (closeProfileBtn) {
+    closeProfileBtn.addEventListener("click", () => {
+      profileOverlay.classList.add("hidden");
+    });
+  }
+
+  if (avatarInput) {
+    avatarInput.addEventListener("input", () => {
+      if (avatarInput.value) {
+        profilePreview.src = avatarInput.value;
+        profilePreview.style.display = "inline-block";
+      } else {
+        profilePreview.style.display = "none";
+      }
+    });
+  }
+
+  if (saveProfileBtn) {
+    saveProfileBtn.addEventListener("click", async () => {
+      if (!window.currentUser) return;
+      const newUsername = usernameInput.value.trim();
+      const newAvatar = avatarInput.value.trim();
+
+      saveProfileBtn.disabled = true;
+      saveProfileBtn.textContent = "Salvando...";
+
+      try {
+        const res = await fetch("/api/user/profile", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: window.currentUser.email,
+            username: newUsername,
+            avatar: newAvatar,
+          }),
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          window.currentUser = data.user;
+          updateLobbyWelcome();
+          profileMsg.textContent = "Perfil atualizado!";
+          profileMsg.style.color = "green";
+          setTimeout(() => profileOverlay.classList.add("hidden"), 1500);
+        } else {
+          profileMsg.textContent = data.message;
+          profileMsg.style.color = "red";
+        }
+      } catch (err) {
+        profileMsg.textContent = "Erro de conexão.";
+        profileMsg.style.color = "red";
+      } finally {
+        saveProfileBtn.disabled = false;
+        saveProfileBtn.textContent = "Salvar Alterações";
+      }
+    });
+  }
+
   // --- LÓGICA DE TORNEIO ---
   const joinTournamentBtn = document.getElementById("join-tournament-btn");
   const leaveTournamentBtn = document.getElementById("leave-tournament-btn");
@@ -773,10 +854,23 @@ window.initLobby = function (socket, UI) {
   // --- Helpers Locais ---
   function updateLobbyWelcome() {
     const welcomeMsg = document.getElementById("lobby-welcome-message");
+    const avatarImg = document.getElementById("lobby-avatar");
+
     if (welcomeMsg && window.currentUser) {
-      welcomeMsg.textContent = `Bem-vindo, ${
-        window.currentUser.email
-      }! Saldo: R$ ${window.currentUser.saldo.toFixed(2)}`;
+      const displayName =
+        window.currentUser.username || window.currentUser.email;
+      welcomeMsg.textContent = `Olá, ${displayName}! (R$ ${window.currentUser.saldo.toFixed(
+        2
+      )})`;
+
+      if (avatarImg) {
+        if (window.currentUser.avatar) {
+          avatarImg.src = window.currentUser.avatar;
+          avatarImg.style.display = "block";
+        } else {
+          avatarImg.style.display = "none";
+        }
+      }
     }
   }
 

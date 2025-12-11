@@ -30,6 +30,8 @@ window.UI = {
       playersHud: document.getElementById("players-hud"),
       whitePlayerName: document.getElementById("white-player-name"),
       blackPlayerName: document.getElementById("black-player-name"),
+      whitePlayerAvatar: document.getElementById("white-player-avatar"), // NOVO
+      blackPlayerAvatar: document.getElementById("black-player-avatar"), // NOVO
       createRoomBtn: document.getElementById("create-room-btn"),
       betAmountInput: document.getElementById("bet-amount-input"),
       gameModeSelect: document.getElementById("game-mode-select"),
@@ -40,7 +42,7 @@ window.UI = {
       lobbyErrorMessage: document.getElementById("lobby-error-message"),
       moveSound: document.getElementById("move-sound"),
       captureSound: document.getElementById("capture-sound"),
-      joinSound: document.getElementById("join-sound"), // NOVO
+      joinSound: document.getElementById("join-sound"),
     };
   },
 
@@ -82,8 +84,6 @@ window.UI = {
       piece.style.zIndex = 100;
 
       if (isFlipped) {
-        // Alteração na Lógica: Ao aplicar 'rotate' ANTES do 'translate', reorientamos os eixos
-        // da peça para alinhar com a tela (360 graus efetivos), permitindo usar deltas normais.
         piece.style.transform = `rotate(180deg) translate(${deltaX}px, ${deltaY}px)`;
       } else {
         piece.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
@@ -219,11 +219,15 @@ window.UI = {
         timeText += " (Jogada)";
       }
 
+      // --- NOVO: Exibe avatar do criador ---
+      const creatorName = room.creatorEmail.split("@")[0]; // Pode ser username se atualizado
+      const avatarHtml = room.creatorAvatar
+        ? `<img src="${room.creatorAvatar}" style="width:25px; height:25px; border-radius:50%; vertical-align:middle; margin-right:5px; object-fit:cover;">`
+        : "";
+
       card.innerHTML = `
             <div class="room-card-info">
-                <p><strong>Criador:</strong> ${
-                  room.creatorEmail.split("@")[0]
-                }</p>
+                <p><strong>Criador:</strong> ${avatarHtml}${creatorName}</p>
                 <p><strong>Aposta:</strong> R$ ${room.bet.toFixed(2)}</p>
                 <p><strong>Modo:</strong> ${gameModeText}</p>
                 <p><strong>Tempo:</strong> ${timeText}</p>
@@ -262,11 +266,12 @@ window.UI = {
       };
       const gameModeText = gameModeNames[room.gameMode] || "Clássico 8x8";
 
+      const p1Name = room.player1Email.split("@")[0];
+      const p2Name = room.player2Email.split("@")[0];
+
       card.innerHTML = `
             <div class="room-card-info">
-                <p><strong>Jogadores:</strong> ${
-                  room.player1Email.split("@")[0]
-                } vs ${room.player2Email.split("@")[0]}</p>
+                <p><strong>Jogadores:</strong> ${p1Name} vs ${p2Name}</p>
                 <p><strong>Aposta:</strong> R$ ${room.bet.toFixed(2)}</p>
                 <p><strong>Modo:</strong> ${gameModeText}</p>
             </div>
@@ -290,7 +295,7 @@ window.UI = {
       options = [
         { val: 5, label: "5 segundos" },
         { val: 7, label: "7 segundos" },
-        { val: 10, label: "10 segundos" }, // ADICIONADO: Opção de 10s
+        { val: 10, label: "10 segundos" },
         { val: 30, label: "30 segundos" },
         { val: 40, label: "40 segundos" },
       ];
@@ -373,8 +378,7 @@ window.UI = {
   playAudio: function (type) {
     let sound;
     if (type === "capture") sound = this.elements.captureSound;
-    else if (type === "join")
-      sound = this.elements.joinSound; // Lógica para o som de entrada
+    else if (type === "join") sound = this.elements.joinSound;
     else sound = this.elements.moveSound;
 
     if (sound) {
@@ -383,15 +387,39 @@ window.UI = {
     }
   },
 
+  // --- ATUALIZADO: Mostra Avatares no HUD ---
   updatePlayerNames: function (users) {
     if (!users) return;
-    const whiteName = users.white ? users.white.split("@")[0] : "Brancas";
-    const blackName = users.black ? users.black.split("@")[0] : "Pretas";
+    // Preferência pelo username ou fallback para parte do email
+    const whiteName =
+      users.whiteName || (users.white ? users.white.split("@")[0] : "Brancas");
+    const blackName =
+      users.blackName || (users.black ? users.black.split("@")[0] : "Pretas");
 
     if (this.elements.whitePlayerName)
       this.elements.whitePlayerName.textContent = whiteName;
     if (this.elements.blackPlayerName)
       this.elements.blackPlayerName.textContent = blackName;
+
+    // Atualiza Avatares
+    if (this.elements.whitePlayerAvatar) {
+      if (users.whiteAvatar) {
+        this.elements.whitePlayerAvatar.src = users.whiteAvatar;
+        this.elements.whitePlayerAvatar.classList.remove("hidden");
+      } else {
+        this.elements.whitePlayerAvatar.classList.add("hidden");
+      }
+    }
+
+    if (this.elements.blackPlayerAvatar) {
+      if (users.blackAvatar) {
+        this.elements.blackPlayerAvatar.src = users.blackAvatar;
+        this.elements.blackPlayerAvatar.classList.remove("hidden");
+      } else {
+        this.elements.blackPlayerAvatar.classList.add("hidden");
+      }
+    }
+
     if (this.elements.playersHud)
       this.elements.playersHud.classList.remove("hidden");
   },

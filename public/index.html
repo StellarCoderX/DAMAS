@@ -189,7 +189,7 @@
     </div>
   </div>
 
-  <!-- MODAL DE TUTORIAL GERAL (NOVO) -->
+  <!-- MODAL DE TUTORIAL GERAL -->
   <div id="general-tutorial-overlay" class="hidden" style="
       position: fixed;
       top: 0;
@@ -250,8 +250,42 @@
     </div>
   </div>
 
+  <!-- ### MODAL DE PERFIL ### -->
+  <div id="profile-overlay" class="hidden">
+    <div class="modal-box">
+      <h3>Meu Perfil</h3>
+      <div style="text-align: center; margin-bottom: 20px;">
+        <img id="profile-preview-img" src="" alt="Avatar"
+          style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid #f1c40f; object-fit: cover; background: #555;">
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; text-align: left; margin-bottom: 5px;">Nome de Usuário (Nick):</label>
+        <input type="text" id="profile-username-input" class="modal-input" placeholder="Ex: MestreDasDamas">
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; text-align: left; margin-bottom: 5px;">URL da Foto (Avatar):</label>
+        <input type="text" id="profile-avatar-input" class="modal-input" placeholder="https://exemplo.com/foto.jpg">
+        <small style="color: #aaa; display: block; text-align: left; margin-top: 2px;">Cole o link direto de uma imagem
+          da internet.</small>
+      </div>
+      <p id="profile-message" style="min-height: 20px; font-weight: bold;"></p>
+      <button id="save-profile-btn" style="background-color: #2ecc71; margin-bottom: 10px;">Salvar Alterações</button>
+      <button id="close-profile-btn" style="background-color: #e74c3c;">Fechar</button>
+    </div>
+  </div>
+
   <div id="lobby-container" class="hidden">
-    <h2 id="lobby-welcome-message"></h2>
+    <!-- ATUALIZADO: Mostra Avatar no Welcome -->
+    <div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px;">
+      <img id="lobby-avatar" src="" alt="Avatar"
+        style="width: 60px; height: 60px; border-radius: 50%; border: 2px solid #fff; object-fit: cover; display: none;">
+      <div>
+        <h2 id="lobby-welcome-message" style="margin: 0; text-align: left;"></h2>
+        <button id="open-profile-btn"
+          style="padding: 5px 10px; font-size: 0.8em; background-color: #34495e; margin-top: 5px; width: auto; display: inline-block;">✏️
+          Editar Perfil</button>
+      </div>
+    </div>
 
     <!-- ### SEÇÃO TORNEIO (EXPANSÍVEL) ### -->
     <div class="tournament-card">
@@ -427,10 +461,16 @@
     <div id="players-hud" class="players-hud hidden">
       <div class="player-badge white-player">
         <div class="piece-icon white-piece-icon"></div>
+        <!-- AVATAR NO JOGO -->
+        <img id="white-player-avatar" src="" class="hidden"
+          style="width:30px; height:30px; border-radius:50%; margin-right:5px; object-fit:cover;">
         <span id="white-player-name">Jogador 1</span>
       </div>
       <div class="vs-badge">VS</div>
       <div class="player-badge black-player">
+        <!-- AVATAR NO JOGO -->
+        <img id="black-player-avatar" src="" class="hidden"
+          style="width:30px; height:30px; border-radius:50%; margin-right:5px; object-fit:cover;">
         <div class="piece-icon black-piece-icon"></div>
         <span id="black-player-name">Jogador 2</span>
       </div>

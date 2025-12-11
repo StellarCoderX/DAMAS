@@ -25,26 +25,34 @@ let io; // Variável global para instância do Socket.IO
 function getLobbyInfo() {
   const waitingRooms = Object.values(gameRooms)
     .filter((room) => room.players.length === 1 && !room.isGameConcluded)
-    .map((room) => ({
-      roomCode: room.roomCode,
-      bet: room.bet,
-      gameMode: room.gameMode,
-      timeControl: room.timeControl,
-      creatorEmail: room.players[0]?.user?.email || "Desconhecido",
-      timerDuration: room.timerDuration,
-    }));
+    .map((room) => {
+      const p1 = room.players[0].user;
+      return {
+        roomCode: room.roomCode,
+        bet: room.bet,
+        gameMode: room.gameMode,
+        timeControl: room.timeControl,
+        creatorEmail: p1.username || p1.email, // Usa username se existir
+        creatorAvatar: p1.avatar, // Passa o avatar
+        timerDuration: room.timerDuration,
+      };
+    });
 
   const activeRooms = Object.values(gameRooms)
     .filter((room) => room.players.length === 2 && !room.isGameConcluded)
-    .map((room) => ({
-      roomCode: room.roomCode,
-      bet: room.bet,
-      gameMode: room.gameMode,
-      timeControl: room.timeControl,
-      player1Email: room.players[0]?.user?.email || "P1",
-      player2Email: room.players[1]?.user?.email || "P2",
-      timerDuration: room.timerDuration,
-    }));
+    .map((room) => {
+      const p1 = room.players[0].user;
+      const p2 = room.players[1].user;
+      return {
+        roomCode: room.roomCode,
+        bet: room.bet,
+        gameMode: room.gameMode,
+        timeControl: room.timeControl,
+        player1Email: p1.username || p1.email, // Username
+        player2Email: p2.username || p2.email, // Username
+        timerDuration: room.timerDuration,
+      };
+    });
 
   return { waiting: waitingRooms, active: activeRooms };
 }
@@ -162,7 +170,15 @@ async function startGameLogic(room) {
 
   room.game = {
     players: { white: whitePlayer.socketId, black: blackPlayer.socketId },
-    users: { white: whitePlayer.user.email, black: blackPlayer.user.email },
+    users: {
+      white: whitePlayer.user.email,
+      black: blackPlayer.user.email,
+      // NOVOS CAMPOS PARA DISPLAY NO CLIENTE
+      whiteName: whitePlayer.user.username || whitePlayer.user.email,
+      blackName: blackPlayer.user.username || blackPlayer.user.email,
+      whiteAvatar: whitePlayer.user.avatar,
+      blackAvatar: blackPlayer.user.avatar,
+    },
     boardState: boardState,
     boardSize: boardSize,
     currentPlayer: "b",

@@ -91,11 +91,54 @@ app.post("/api/login", async (req, res) => {
       user: {
         email: user.email,
         saldo: user.saldo,
+        username: user.username, // NOVO
+        avatar: user.avatar, // NOVO
         referralEarnings: user.referralEarnings,
       },
     });
   } catch (error) {
     res.status(500).json({ message: "Erro no servidor." });
+  }
+});
+
+// ### NOVA ROTA DE ATUALIZAÇÃO DE PERFIL ###
+app.put("/api/user/profile", async (req, res) => {
+  try {
+    const { email, username, avatar } = req.body;
+    if (!email) return res.status(400).json({ message: "Email necessário." });
+
+    // Verifica se o username já existe em OUTRO usuário
+    if (username) {
+      const existing = await User.findOne({ username: username });
+      if (existing && existing.email !== email.toLowerCase()) {
+        return res
+          .status(400)
+          .json({ message: "Este nome de usuário já está em uso." });
+      }
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user)
+      return res.status(404).json({ message: "Usuário não encontrado." });
+
+    user.username = username || user.username;
+    user.avatar = avatar || user.avatar;
+
+    await user.save();
+
+    res.json({
+      message: "Perfil atualizado!",
+      user: {
+        email: user.email,
+        saldo: user.saldo,
+        username: user.username,
+        avatar: user.avatar,
+        referralEarnings: user.referralEarnings,
+      },
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "Erro ao atualizar perfil." });
   }
 });
 
@@ -110,6 +153,8 @@ app.post("/api/user/re-authenticate", async (req, res) => {
       user: {
         email: user.email,
         saldo: user.saldo,
+        username: user.username, // NOVO
+        avatar: user.avatar, // NOVO
         referralEarnings: user.referralEarnings,
       },
     });
