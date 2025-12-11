@@ -175,6 +175,24 @@ window.initLobby = function (socket, UI) {
   const leaveTournamentBtn = document.getElementById("leave-tournament-btn");
   const trnMessage = document.getElementById("trn-message");
 
+  // NOVO: Lógica do botão de Informação do Torneio
+  const infoBtn = document.getElementById("tournament-info-btn");
+  if (infoBtn) {
+    infoBtn.addEventListener("click", (e) => {
+      e.stopPropagation(); // Evita que o clique abra/feche o acordeão
+      document
+        .getElementById("tournament-info-overlay")
+        .classList.remove("hidden");
+    });
+  }
+  document
+    .getElementById("close-tournament-info-btn")
+    .addEventListener("click", () => {
+      document
+        .getElementById("tournament-info-overlay")
+        .classList.add("hidden");
+    });
+
   async function updateTournamentStatus() {
     try {
       let url = "/api/tournament/status";

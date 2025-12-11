@@ -10,7 +10,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
 
+  <!-- Importando os 3 arquivos CSS -->
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="game.css" />
+  <link rel="stylesheet" href="tournament.css" />
+
   <!-- SDK Mercado Pago -->
   <script src="https://sdk.mercadopago.com/js/v2"></script>
 
@@ -105,6 +109,31 @@
       height: 60px;
       margin-bottom: 10px;
     }
+
+    /* Botão de Info do Torneio */
+    .info-icon {
+      display: inline-block;
+      width: 22px;
+      height: 22px;
+      background-color: rgba(255, 255, 255, 0.2);
+      color: white;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 22px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-left: 10px;
+      position: relative;
+      z-index: 10;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      transition: background-color 0.2s;
+    }
+
+    .info-icon:hover {
+      background-color: #3498db;
+      border-color: #3498db;
+    }
   </style>
 </head>
 
@@ -161,7 +190,9 @@
     <!-- ### SEÇÃO TORNEIO (EXPANSÍVEL) ### -->
     <div class="tournament-card">
       <div class="tournament-header collapsible-header" onclick="toggleSection(this)">
-        🏆 TORNEIO DIÁRIO (MATA-MATA) 🏆
+        🏆 TORNEIO DIÁRIO
+        <!-- BOTÃO DE INFO -->
+        <span id="tournament-info-btn" class="info-icon" title="Como funciona?">?</span>
       </div>
       <div class="tournament-body collapsible-body">
         <p>⏰ Início: <strong>19:00</strong> (Todo dia)</p>
@@ -361,6 +392,30 @@
       </div>
       <p id="tournament-wait-message" style="color: #f1c40f;">Aguardando início das partidas...</p>
       <button id="close-bracket-btn" style="background-color: #e74c3c;">Fechar</button>
+    </div>
+  </div>
+
+  <!-- NOVO: MODAL DE INFORMAÇÕES DO TORNEIO -->
+  <div id="tournament-info-overlay" class="hidden">
+    <div class="modal-box" style="text-align: left; max-width: 450px;">
+      <h3 style="color: #f1c40f; text-align: center; margin-bottom: 20px;">ℹ️ Como Funciona o Torneio</h3>
+      <ul style="font-size: 0.9em; line-height: 1.6; color: #ecf0f1; padding-left: 20px; list-style-type: disc;">
+        <li style="margin-bottom: 8px;"><strong>⏰ Horário:</strong> O torneio inicia pontualmente às 19:00 (Horário de
+          Brasília).</li>
+        <li style="margin-bottom: 8px;"><strong>⚔️ Formato Mata-Mata:</strong> É simples: quem perde, sai. Quem ganha,
+          avança para a próxima fase.</li>
+        <li style="margin-bottom: 8px;"><strong>💰 Inscrição:</strong> O valor da inscrição é descontado automaticamente
+          do seu saldo ao entrar.</li>
+        <li style="margin-bottom: 8px;"><strong>👥 Mínimo de Jogadores:</strong> O torneio só começa se houver pelo
+          menos 8 inscritos online na hora marcada.</li>
+        <li style="margin-bottom: 8px;"><strong>🏆 Premiação:</strong> O prêmio total arrecadado é dividido: 50% para o
+          Campeão e 30% para o Vice.</li>
+        <li style="margin-bottom: 8px;"><strong>↩️ Reembolso:</strong> Se o torneio for cancelado por falta de quórum, o
+          valor da inscrição é devolvido integralmente para sua conta.</li>
+        <li><strong>⚠️ W.O.:</strong> Se o seu oponente não aparecer ou cair, você vence automaticamente.</li>
+      </ul>
+      <button id="close-tournament-info-btn" style="background-color: #3498db; margin-top: 20px;">Entendi, Vamos
+        Jogar!</button>
     </div>
   </div>
 
