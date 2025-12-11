@@ -290,6 +290,7 @@ window.UI = {
       options = [
         { val: 5, label: "5 segundos" },
         { val: 7, label: "7 segundos" },
+        { val: 10, label: "10 segundos" }, // ADICIONADO: Opção de 10s
         { val: 30, label: "30 segundos" },
         { val: 40, label: "40 segundos" },
       ];
