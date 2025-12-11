@@ -852,6 +852,12 @@ function initializeSocket(ioInstance) {
               { email: player2.user.email },
               { $inc: { saldo: -room.bet } }
             );
+
+            // FIX: Reset match state for Tablita to force new opening on rematch
+            if (room.gameMode === "tablita") {
+              room.match = null;
+            }
+
             await startGameLogic(room);
           } catch (err) {
             console.error(err);
