@@ -5,7 +5,7 @@ const { gameRooms } = require("./socketHandlers");
 // Configurações
 const MIN_PLAYERS = 8;
 const ENTRY_FEE = 2.0;
-const TOURNAMENT_HOUR = 19; // 19:00
+const TOURNAMENT_HOUR = 21; // ALTERADO PARA 21:00
 const TOURNAMENT_MINUTE = 0;
 
 let io; // Referência ao Socket.IO
@@ -16,7 +16,7 @@ function initializeTournamentManager(ioInstance) {
 
   // Verifica o horário a cada 30 segundos
   checkInterval = setInterval(checkSchedule, 30 * 1000);
-  console.log("[Torneio] Gerenciador iniciado. Agendado para 19:00 BRT.");
+  console.log("[Torneio] Gerenciador iniciado. Agendado para 21:00 BRT.");
 }
 
 async function getTodaysTournament() {
