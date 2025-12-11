@@ -246,7 +246,6 @@ app.post("/api/payment/create_preference", async (req, res) => {
       return res.status(400).json({ message: "Valor mínimo de R$ 1,00" });
 
     // ### REAJUSTE DE TAXA: Adiciona 1% ao valor total ###
-    // O valor pago cobrirá a taxa de ~0.99% do PIX
     const amountWithFee = amountNum * 1.01;
     // Arredonda para 2 casas decimais
     const finalAmountToPay = Math.round(amountWithFee * 100) / 100;
@@ -257,8 +256,7 @@ app.post("/api/payment/create_preference", async (req, res) => {
     const notificationUrl = `${protocol}://${host}/api/payment/webhook`;
     const backUrl = `${protocol}://${host}/`;
 
-    // ### ALTERAÇÃO AQUI: EXCLUINDO TUDO MENOS PIX ###
-    // Corrigi a lista para usar apenas IDs de exclusão válidos e evitar erro da API
+    // ### CORREÇÃO: REMOVIDOS TIPOS INVÁLIDOS QUE CAUSAVAM ERRO 500 ###
     const result = await preference.create({
       body: {
         items: [
@@ -274,8 +272,8 @@ app.post("/api/payment/create_preference", async (req, res) => {
             { id: "ticket" }, // Boleto
             { id: "credit_card" }, // Cartão de Crédito
             { id: "debit_card" }, // Cartão de Débito
-            { id: "account_money" }, // ### Bloqueia pagamento com Saldo MP ###
             { id: "prepaid_card" }, // Cartão pré-pago
+            { id: "account_money" }, // ### Bloqueia pagamento com Saldo MP ###
           ],
           installments: 1,
         },
@@ -291,7 +289,7 @@ app.post("/api/payment/create_preference", async (req, res) => {
     });
     res.json({ init_point: result.init_point });
   } catch (error) {
-    console.error(error);
+    console.error("Erro MP:", error); // Log detalhado para debug
     res.status(500).json({ message: "Erro ao gerar pagamento." });
   }
 });
@@ -316,19 +314,14 @@ app.post("/api/payment/webhook", async (req, res) => {
         let userEmail = null;
         let creditsToAdd = 0;
 
-        // Tenta extrair dados do external_reference (JSON ou String legada)
         try {
-          // Verifica se é JSON (novo formato com créditos definidos)
           const refData = JSON.parse(payment.external_reference);
           if (refData && refData.email) {
             userEmail = refData.email;
             creditsToAdd = Number(refData.credits);
           }
         } catch (e) {
-          // Se falhar o parse, assume formato antigo (apenas email)
           userEmail = payment.external_reference;
-          // Se for formato antigo, usamos o valor total pago como crédito
-          // (ou poderíamos descontar a taxa manualmente aqui, mas é mais seguro dar o crédito full)
           creditsToAdd = payment.transaction_amount;
         }
 
@@ -341,7 +334,6 @@ app.post("/api/payment/webhook", async (req, res) => {
           if (!user.hasDeposited) {
             user.firstDepositValue = creditsToAdd;
             user.hasDeposited = true;
-            // Bônus de indicação
             if (creditsToAdd >= 5 && user.referredBy) {
               const referrer = await User.findOne({ email: user.referredBy });
               if (referrer) {
@@ -357,7 +349,7 @@ app.post("/api/payment/webhook", async (req, res) => {
           await Transaction.create({
             paymentId: paymentIdStr,
             email: userEmail,
-            amount: creditsToAdd, // Salva o valor de CRÉDITOS, não o pago com taxa
+            amount: creditsToAdd,
             status: payment.status,
           });
 
@@ -392,21 +384,16 @@ app.put("/api/admin/add-saldo-bonus", adminAuthBody, async (req, res) => {
 
     user.saldo += amountVal;
 
-    // --- CORREÇÃO: LÓGICA DE BÔNUS MANUAL ---
-    // Verifica se o usuário ainda não depositou para processar o bônus
     if (!user.hasDeposited && amountVal > 0) {
       user.firstDepositValue = amountVal;
       user.hasDeposited = true;
 
-      // Se o valor inserido manualmente for >= 5 e houver indicação
       if (amountVal >= 5 && user.referredBy) {
         const referrer = await User.findOne({ email: user.referredBy });
         if (referrer) {
-          referrer.saldo += 1.0; // Adiciona R$ 1,00 ao indicador
+          referrer.saldo += 1.0;
           referrer.referralEarnings += 1.0;
           await referrer.save();
-
-          // Notifica o indicador se ele estiver online
           io.emit("balanceUpdate", {
             email: referrer.email,
             newSaldo: referrer.saldo,
@@ -414,11 +401,8 @@ app.put("/api/admin/add-saldo-bonus", adminAuthBody, async (req, res) => {
         }
       }
     }
-    // ----------------------------------------
 
     await user.save();
-
-    // Notifica o usuário que recebeu o saldo
     io.emit("balanceUpdate", { email: user.email, newSaldo: user.saldo });
 
     res.json({
@@ -481,7 +465,7 @@ app.post("/api/admin/reset-all-saldos", adminAuthBody, async (req, res) => {
 // Inicialização
 initializeManager(io, gameRooms);
 tournamentManager.initializeTournamentManager(io);
-setTournamentManager(tournamentManager); // Injeta a dependência circular
+setTournamentManager(tournamentManager);
 initializeSocket(io);
 
 const HOST = process.env.HOST || "0.0.0.0";
