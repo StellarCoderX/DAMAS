@@ -1105,6 +1105,11 @@ document.addEventListener("DOMContentLoaded", () => {
       processGameUpdate(gameState, true);
       UI.highlightMandatoryPieces(gameState.mandatoryPieces);
       UI.updatePlayerNames(gameState.users);
+
+      // NOVO: TOCAR SOM DE ENTRADA QUANDO O JOGO COMEÇA
+      if (!isSpectator) {
+        UI.playAudio("join");
+      }
     } catch (e) {
       console.error(e);
       alert("Erro ao iniciar.");

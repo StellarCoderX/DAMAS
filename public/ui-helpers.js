@@ -40,6 +40,7 @@ window.UI = {
       lobbyErrorMessage: document.getElementById("lobby-error-message"),
       moveSound: document.getElementById("move-sound"),
       captureSound: document.getElementById("capture-sound"),
+      joinSound: document.getElementById("join-sound"), // NOVO
     };
   },
 
@@ -369,8 +370,12 @@ window.UI = {
   },
 
   playAudio: function (type) {
-    const sound =
-      type === "capture" ? this.elements.captureSound : this.elements.moveSound;
+    let sound;
+    if (type === "capture") sound = this.elements.captureSound;
+    else if (type === "join")
+      sound = this.elements.joinSound; // Lógica para o som de entrada
+    else sound = this.elements.moveSound;
+
     if (sound) {
       sound.currentTime = 0;
       sound.play().catch((e) => console.log("Áudio bloqueado:", e));
