@@ -1,4 +1,4 @@
-// index.js (ORDEM DE SEGURANÇA NO WEBHOOK)
+// index.js
 require("dotenv").config();
 
 const express = require("express");
@@ -14,7 +14,12 @@ const bcrypt = require("bcryptjs");
 const { MercadoPagoConfig, Preference, Payment } = require("mercadopago");
 
 const { initializeSocket, gameRooms } = require("./src/socketHandlers");
-const { initializeManager } = require("./src/gameManager");
+const {
+  initializeManager,
+  setTournamentManager,
+} = require("./src/gameManager");
+// ### NOVO ###
+const tournamentManager = require("./src/tournamentManager");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -54,27 +59,19 @@ app.post("/api/register", async (req, res) => {
   try {
     const { email, password, referralCode } = req.body;
     const emailLower = email.toLowerCase();
-
     const existingUser = await User.findOne({ email: emailLower });
-    if (existingUser) {
+    if (existingUser)
       return res.status(400).json({ message: "Este e-mail já está em uso." });
-    }
-
     const newUser = new User({ email: emailLower, password });
-
     if (referralCode) {
       const referralLower = referralCode.toLowerCase();
       const referrer = await User.findOne({ email: referralLower });
-      if (referrer && referralLower !== emailLower) {
+      if (referrer && referralLower !== emailLower)
         newUser.referredBy = referralLower;
-      }
     }
-
     await newUser.save();
-    console.log(`[Registro] Novo usuário criado: ${emailLower}`);
     res.status(201).json({ message: "Usuário cadastrado com sucesso!" });
   } catch (error) {
-    console.error("[Registro] Erro:", error);
     res.status(500).json({ message: "Ocorreu um erro no servidor." });
   }
 });
@@ -84,15 +81,11 @@ app.post("/api/login", async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password)
       return res.status(400).json({ message: "Email e senha obrigatórios." });
-
     const emailLower = email.toLowerCase();
     const user = await User.findOne({ email: emailLower });
-
     if (!user) return res.status(400).json({ message: "Inválido." });
-
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: "Inválido." });
-
     res.status(200).json({
       message: "Login bem-sucedido!",
       user: {
@@ -161,13 +154,11 @@ app.post("/api/withdraw", async (req, res) => {
       return res.status(400).json({ message: "Dados incompletos." });
     if (amount <= 0)
       return res.status(400).json({ message: "Valor inválido." });
-
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user)
       return res.status(404).json({ message: "Usuário não encontrado." });
     if (user.saldo < amount)
       return res.status(400).json({ message: "Saldo insuficiente." });
-
     const newWithdrawal = new Withdrawal({
       email: email.toLowerCase(),
       amount,
@@ -181,35 +172,86 @@ app.post("/api/withdraw", async (req, res) => {
   }
 });
 
-// --- NOVAS ROTAS DE PAGAMENTO (MERCADO PAGO) ---
+// --- ROTA DE TORNEIO (ATUALIZADA) ---
+app.post("/api/tournament/register", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "Email obrigatório." });
 
+    const result = await tournamentManager.registerPlayer(email.toLowerCase());
+
+    if (result.success) {
+      const user = await User.findOne({ email: email.toLowerCase() });
+      return res.json({ message: result.message, newSaldo: user.saldo });
+    } else {
+      return res.status(400).json({ message: result.message });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Erro interno no torneio." });
+  }
+});
+
+// ### NOVO: ROTA PARA SAIR DO TORNEIO ###
+app.post("/api/tournament/leave", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "Email obrigatório." });
+
+    const result = await tournamentManager.unregisterPlayer(
+      email.toLowerCase()
+    );
+
+    if (result.success) {
+      const user = await User.findOne({ email: email.toLowerCase() });
+      return res.json({ message: result.message, newSaldo: user.saldo });
+    } else {
+      return res.status(400).json({ message: result.message });
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Erro interno ao sair." });
+  }
+});
+
+app.get("/api/tournament/status", async (req, res) => {
+  try {
+    const { email } = req.query; // Recebe o email para verificar se está inscrito
+    const tournament = await tournamentManager.getTodaysTournament();
+
+    let isRegistered = false;
+    if (email && tournament.participants.includes(email.toLowerCase())) {
+      isRegistered = true;
+    }
+
+    res.json({
+      status: tournament.status,
+      participantsCount: tournament.participants.length,
+      entryFee: tournament.entryFee,
+      prizePool: tournament.prizePool,
+      winner: tournament.winner,
+      runnerUp: tournament.runnerUp,
+      isRegistered: isRegistered, // Retorna se o usuário está inscrito
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Erro." });
+  }
+});
+
+// --- PAGAMENTO MERCADO PAGO ---
 app.post("/api/payment/create_preference", async (req, res) => {
   try {
-    if (!client) {
-      console.error(
-        "[MP] Client não inicializado. Verifique MERCADOPAGO_ACCESS_TOKEN."
-      );
-      return res
-        .status(500)
-        .json({ message: "Erro de configuração no servidor." });
-    }
-
+    if (!client)
+      return res.status(500).json({ message: "Erro de configuração." });
     const { amount, email } = req.body;
     const amountNum = Number(amount);
-
-    if (!amountNum || amountNum < 1) {
+    if (!amountNum || amountNum < 1)
       return res.status(400).json({ message: "Valor mínimo de R$ 1,00" });
-    }
 
     const preference = new Preference(client);
-
     const protocol = req.headers["x-forwarded-proto"] || "http";
     const host = req.headers.host;
-
     const notificationUrl = `${protocol}://${host}/api/payment/webhook`;
     const backUrl = `${protocol}://${host}/`;
-
-    console.log(`[MP] Criando preferência. Notificação: ${notificationUrl}`);
 
     const result = await preference.create({
       body: {
@@ -222,96 +264,61 @@ app.post("/api/payment/create_preference", async (req, res) => {
           },
         ],
         payment_methods: {
-          excluded_payment_types: [
-            { id: "ticket" },
-            { id: "credit_card" },
-            { id: "debit_card" },
-          ],
+          excluded_payment_types: [{ id: "ticket" }],
           installments: 1,
         },
         external_reference: email,
         notification_url: notificationUrl,
-
-        back_urls: {
-          success: backUrl,
-          failure: backUrl,
-          pending: backUrl,
-        },
+        back_urls: { success: backUrl, failure: backUrl, pending: backUrl },
         auto_return: "approved",
       },
     });
-
     res.json({ init_point: result.init_point });
   } catch (error) {
-    console.error(
-      "[MP] Erro ao criar preferência:",
-      JSON.stringify(error, null, 2)
-    );
-    res
-      .status(500)
-      .json({ message: "Erro ao gerar pagamento.", error: error.message });
+    res.status(500).json({ message: "Erro ao gerar pagamento." });
   }
 });
 
 app.post("/api/payment/webhook", async (req, res) => {
   const { data, type } = req.body;
-
   res.sendStatus(200);
-
   if (type === "payment" || req.body.action === "payment.created") {
     try {
       if (!client) return;
-
       const paymentId = data ? data.id : req.body.data.id;
       const paymentClient = new Payment(client);
       const payment = await paymentClient.get({ id: paymentId });
-
       if (payment && payment.status === "approved") {
         const userEmail = payment.external_reference;
         const amount = payment.transaction_amount;
         const paymentIdStr = payment.id.toString();
-
         const existingTx = await Transaction.findOne({
           paymentId: paymentIdStr,
         });
+        if (existingTx) return;
 
-        if (existingTx) {
-          console.log(`[Webhook] Pagamento ${paymentIdStr} já processado.`);
-          return;
-        }
-
-        // ### ATUALIZAÇÃO SEGURA: Salva o usuário PRIMEIRO ###
         const user = await User.findOne({ email: userEmail.toLowerCase() });
         if (user) {
           user.saldo += amount;
-
           if (!user.hasDeposited) {
             user.firstDepositValue = amount;
             user.hasDeposited = true;
-
             if (amount >= 5 && user.referredBy) {
               const referrer = await User.findOne({ email: user.referredBy });
               if (referrer) {
                 referrer.saldo += 1;
                 referrer.referralEarnings += 1;
                 await referrer.save();
-                console.log(`[Bônus] R$ 1,00 para ${referrer.email}`);
               }
             }
           }
-
           await user.save();
-          console.log(`[Depósito] R$ ${amount} para ${userEmail}`);
-
-          // SÓ DEPOIS grava a transação (para garantir que se o usuário falhar, o webhook tenta de novo)
           await Transaction.create({
             paymentId: paymentIdStr,
             email: userEmail,
             amount: amount,
             status: payment.status,
           });
-
-          // Avisa o Frontend (Socket)
           io.emit("balanceUpdate", { email: userEmail, newSaldo: user.saldo });
         }
       }
@@ -321,150 +328,83 @@ app.post("/api/payment/webhook", async (req, res) => {
   }
 });
 
-// --- ROTAS ADMIN (Mantidas) ---
+// Admin routes
 const adminAuthBody = (req, res, next) => {
   const { secret } = req.body;
   if (secret && secret === process.env.ADMIN_SECRET_KEY) next();
   else res.status(403).json({ message: "Acesso não autorizado." });
 };
-
-app.put("/api/admin/add-saldo-bonus", adminAuthBody, async (req, res) => {
-  try {
-    const { email, amountToAdd } = req.body;
-    const amount = Number(amountToAdd);
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user)
-      return res.status(404).json({ message: "Usuário não encontrado." });
-
-    user.saldo += amount;
-    let bonusMessage = "";
-
-    if (!user.hasDeposited) {
-      user.firstDepositValue = amount;
-      user.hasDeposited = true;
-      if (amount >= 5 && user.referredBy) {
-        const referrer = await User.findOne({ email: user.referredBy });
-        if (referrer) {
-          referrer.saldo += 1;
-          referrer.referralEarnings += 1;
-          await referrer.save();
-          bonusMessage = ` (Bônus creditado para ${referrer.email})`;
-        }
-      }
-    }
-    await user.save();
-    res.json({ message: `Sucesso.${bonusMessage}` });
-  } catch (error) {
-    res.status(500).json({ message: "Erro." });
-  }
-});
-
 const adminAuthHeader = (req, res, next) => {
   const secretKey = req.headers["x-admin-secret-key"];
   if (secretKey && secretKey === process.env.ADMIN_SECRET_KEY) next();
   else res.status(403).json({ message: "Acesso não autorizado." });
 };
-
-app.get("/api/admin/users", adminAuthHeader, async (req, res) => {
+app.put("/api/admin/add-saldo-bonus", adminAuthBody, async (req, res) => {
   try {
-    const users = await User.find(
-      {},
-      "email saldo referredBy hasDeposited"
-    ).sort({ email: 1 });
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ message: "Erro." });
-  }
-});
-
-app.get("/api/admin/withdrawals", adminAuthHeader, async (req, res) => {
-  try {
-    const withdrawals = await Withdrawal.find({ status: "pending" }).sort({
-      createdAt: 1,
-    });
-    res.json(withdrawals);
-  } catch (error) {
-    res.status(500).json({ message: "Erro." });
-  }
-});
-
-app.post("/api/admin/approve-withdrawal", adminAuthBody, async (req, res) => {
-  try {
-    const { withdrawalId } = req.body;
-    const withdrawal = await Withdrawal.findById(withdrawalId);
-    if (!withdrawal)
-      return res.status(404).json({ message: "Não encontrada." });
-    if (withdrawal.status !== "pending")
-      return res.status(400).json({ message: "Já processado." });
-
-    const user = await User.findOne({ email: withdrawal.email });
+    const { email, amountToAdd } = req.body;
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user)
       return res.status(404).json({ message: "Usuário não encontrado." });
-    if (user.saldo < withdrawal.amount)
-      return res.status(400).json({ message: "Saldo insuficiente." });
-
-    user.saldo -= withdrawal.amount;
+    user.saldo += Number(amountToAdd);
     await user.save();
-    withdrawal.status = "completed";
-    await withdrawal.save();
-    res.json({ message: "Saque aprovado." });
-  } catch (error) {
+    res.json({ message: "Sucesso." });
+  } catch (e) {
     res.status(500).json({ message: "Erro." });
   }
 });
-
+app.get("/api/admin/users", adminAuthHeader, async (req, res) => {
+  const users = await User.find({}, "email saldo referredBy hasDeposited").sort(
+    { email: 1 }
+  );
+  res.json(users);
+});
+app.get("/api/admin/withdrawals", adminAuthHeader, async (req, res) => {
+  const withdrawals = await Withdrawal.find({ status: "pending" }).sort({
+    createdAt: 1,
+  });
+  res.json(withdrawals);
+});
+app.post("/api/admin/approve-withdrawal", adminAuthBody, async (req, res) => {
+  const { withdrawalId } = req.body;
+  const w = await Withdrawal.findById(withdrawalId);
+  if (w && w.status === "pending") {
+    const u = await User.findOne({ email: w.email });
+    if (u && u.saldo >= w.amount) {
+      u.saldo -= w.amount;
+      await u.save();
+      w.status = "completed";
+      await w.save();
+      return res.json({ message: "Aprovado" });
+    }
+  }
+  res.status(400).json({ message: "Erro" });
+});
 app.post("/api/admin/reject-withdrawal", adminAuthBody, async (req, res) => {
-  try {
-    const { withdrawalId } = req.body;
-    const withdrawal = await Withdrawal.findById(withdrawalId);
-    if (!withdrawal)
-      return res.status(404).json({ message: "Não encontrada." });
-    withdrawal.status = "rejected";
-    await withdrawal.save();
-    res.json({ message: "Rejeitada." });
-  } catch (error) {
-    res.status(500).json({ message: "Erro." });
-  }
+  await Withdrawal.findByIdAndUpdate(req.body.withdrawalId, {
+    status: "rejected",
+  });
+  res.json({ message: "Rejeitada." });
 });
-
 app.put("/api/admin/update-saldo", adminAuthBody, async (req, res) => {
-  try {
-    const { email, newSaldo } = req.body;
-    const result = await User.updateOne(
-      { email: email.toLowerCase() },
-      { $set: { saldo: Number(newSaldo) } }
-    );
-    if (result.matchedCount === 0)
-      return res.status(404).json({ message: "Usuário não encontrado." });
-    res.json({ message: "Saldo atualizado." });
-  } catch (error) {
-    res.status(500).json({ message: "Erro." });
-  }
+  await User.updateOne(
+    { email: req.body.email.toLowerCase() },
+    { $set: { saldo: Number(req.body.newSaldo) } }
+  );
+  res.json({ message: "Atualizado." });
 });
-
 app.delete("/api/admin/user/:email", adminAuthBody, async (req, res) => {
-  try {
-    const result = await User.deleteOne({
-      email: req.params.email.toLowerCase(),
-    });
-    if (result.deletedCount === 0)
-      return res.status(404).json({ message: "Usuário não encontrado." });
-    res.json({ message: "Excluído." });
-  } catch (error) {
-    res.status(500).json({ message: "Erro." });
-  }
+  await User.deleteOne({ email: req.params.email.toLowerCase() });
+  res.json({ message: "Excluído." });
 });
-
 app.post("/api/admin/reset-all-saldos", adminAuthBody, async (req, res) => {
-  try {
-    await User.updateMany({}, { $set: { saldo: 0 } });
-    res.json({ message: "Saldos zerados." });
-  } catch (error) {
-    res.status(500).json({ message: "Erro." });
-  }
+  await User.updateMany({}, { $set: { saldo: 0 } });
+  res.json({ message: "Saldos zerados." });
 });
 
+// Inicialização
 initializeManager(io, gameRooms);
+tournamentManager.initializeTournamentManager(io);
+setTournamentManager(tournamentManager); // Injeta a dependência circular
 initializeSocket(io);
 
 const HOST = process.env.HOST || "0.0.0.0";

@@ -65,6 +65,39 @@
   <div id="lobby-container" class="hidden">
     <h2 id="lobby-welcome-message"></h2>
 
+    <!-- ### SEÇÃO TORNEIO ### -->
+    <div class="tournament-card">
+      <div class="tournament-header">
+        🏆 TORNEIO DIÁRIO (MATA-MATA) 🏆
+      </div>
+      <div class="tournament-body">
+        <p>⏰ Início: <strong>19:00</strong> (Todo dia)</p>
+        <p>💰 Inscrição: <strong>R$ 2,00</strong></p>
+        <p>👥 Mínimo: 8 Jogadores</p>
+        <hr style="border-color: rgba(255,255,255,0.1);">
+        <p>🎁 Prêmios (do Total Arrecadado):</p>
+        <ul style="list-style: none; padding: 0; font-size: 0.9em; color: #f1c40f;">
+          <li>🥇 Campeão: 50%</li>
+          <li>🥈 Vice: 30%</li>
+          <li>🏦 Banca: 20%</li>
+        </ul>
+
+        <div id="tournament-status-area" style="margin-top: 15px;">
+          <p id="trn-participants-count">Inscritos: 0</p>
+          <p id="trn-prize-pool">Prêmio Atual: R$ 0,00</p>
+
+          <div style="display: flex; gap: 10px; justify-content: center;">
+            <button id="join-tournament-btn" class="gold-btn">Inscrever-se (R$ 2,00)</button>
+            <!-- NOVO BOTÃO DE SAIR -->
+            <button id="leave-tournament-btn" class="red-btn hidden"
+              style="width: 100%; max-width: 250px; margin-top: 10px;">Remover Inscrição</button>
+          </div>
+
+          <p id="trn-message" style="font-size: 0.8em; margin-top: 5px; min-height: 1.2em;"></p>
+        </div>
+      </div>
+    </div>
+
     <div style="margin-bottom: 15px; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px;">
       <p style="font-size: 0.9em; margin-bottom: 5px;">💸 Ganhe R$ 1,00 se seu indicado depositar R$ 5,00!</p>
       <button id="copy-referral-btn"
@@ -186,6 +219,11 @@
       👀 MODO ESPECTADOR
     </div>
 
+    <div id="tournament-indicator" class="hidden"
+      style="background-color: #9b59b6; color: #fff; padding: 5px 10px; border-radius: 5px; margin-bottom: 10px; font-weight: bold;">
+      🏆 PARTIDA DE TORNEIO
+    </div>
+
     <div id="players-hud" class="players-hud hidden">
       <div class="player-badge white-player">
         <div class="piece-icon white-piece-icon"></div>
@@ -208,6 +246,19 @@
         <button id="draw-btn">Empate</button>
         <button id="spectator-leave-btn" class="hidden" style="background-color: #c0392b;">Sair do Jogo</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE TORNEIO (MATA-MATA) -->
+  <div id="tournament-bracket-overlay" class="hidden">
+    <div class="modal-box" style="max-width: 95%; max-height: 90vh; overflow-y: auto;">
+      <h3>🏆 Chaveamento do Torneio</h3>
+      <p id="tournament-round-display">Oitavas de Final</p>
+      <div id="tournament-matches-list" style="margin: 20px 0; display: flex; flex-direction: column; gap: 10px;">
+        <!-- Preenchido via JS -->
+      </div>
+      <p id="tournament-wait-message" style="color: #f1c40f;">Aguardando início das partidas...</p>
+      <button id="close-bracket-btn" style="background-color: #e74c3c;">Fechar</button>
     </div>
   </div>
 

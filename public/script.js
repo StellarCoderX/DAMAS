@@ -110,11 +110,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
           document.getElementById("main-container").classList.add("hidden");
           document.getElementById("lobby-container").classList.remove("hidden");
-          document.getElementById(
-            "lobby-welcome-message"
-          ).textContent = `Bem-vindo, ${
-            currentUser.email
-          }! Saldo: R$ ${currentUser.saldo.toFixed(2)}`;
+          updateLobbyWelcome();
+          updateTournamentStatus(); // Carrega status do torneio
           socket.connect();
         } else {
           const msg = document.getElementById("auth-message");
@@ -189,7 +186,8 @@ document.addEventListener("DOMContentLoaded", () => {
   if (refreshLobbyBtn) {
     refreshLobbyBtn.addEventListener("click", () => {
       if (currentUser) {
-        socket.emit("enterLobby");
+        socket.emit("enterLobby", currentUser);
+        updateTournamentStatus(); // Atualiza torneio também
         const originalText = refreshLobbyBtn.textContent;
         refreshLobbyBtn.textContent = "Carregando...";
         refreshLobbyBtn.disabled = true;
@@ -201,7 +199,150 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // --- LÓGICA DE TORNEIO NO FRONTEND (ATUALIZADA) ---
+  const joinTournamentBtn = document.getElementById("join-tournament-btn");
+  const leaveTournamentBtn = document.getElementById("leave-tournament-btn"); // NOVO
+  const trnMessage = document.getElementById("trn-message");
+
+  async function updateTournamentStatus() {
+    try {
+      let url = "/api/tournament/status";
+      if (currentUser) {
+        url += `?email=${currentUser.email}`;
+      }
+
+      const res = await fetch(url);
+      const data = await res.json();
+
+      const countEl = document.getElementById("trn-participants-count");
+      const prizeEl = document.getElementById("trn-prize-pool");
+      if (countEl) countEl.textContent = `Inscritos: ${data.participantsCount}`;
+      if (prizeEl)
+        prizeEl.textContent = `Prêmio Atual: R$ ${data.prizePool.toFixed(2)}`;
+
+      if (joinTournamentBtn && leaveTournamentBtn) {
+        if (data.status === "open") {
+          if (data.isRegistered) {
+            // Se já está inscrito: Esconde "Inscrever", Mostra "Sair"
+            joinTournamentBtn.classList.add("hidden");
+            leaveTournamentBtn.classList.remove("hidden");
+            leaveTournamentBtn.disabled = false;
+          } else {
+            // Se não está inscrito: Mostra "Inscrever", Esconde "Sair"
+            joinTournamentBtn.classList.remove("hidden");
+            leaveTournamentBtn.classList.add("hidden");
+            joinTournamentBtn.disabled = false;
+            joinTournamentBtn.textContent = `Inscrever-se (R$ ${data.entryFee.toFixed(
+              2
+            )})`;
+          }
+        } else if (data.status === "active") {
+          joinTournamentBtn.classList.remove("hidden");
+          leaveTournamentBtn.classList.add("hidden");
+          joinTournamentBtn.disabled = true;
+          joinTournamentBtn.textContent = "Torneio em Andamento";
+        } else {
+          joinTournamentBtn.classList.remove("hidden");
+          leaveTournamentBtn.classList.add("hidden");
+          joinTournamentBtn.disabled = true;
+          joinTournamentBtn.textContent = "Inscrições Fechadas";
+        }
+      }
+    } catch (e) {
+      console.error("Erro ao atualizar torneio:", e);
+    }
+  }
+
+  if (joinTournamentBtn) {
+    joinTournamentBtn.addEventListener("click", async () => {
+      // 1. Verificação explícita de usuário
+      if (!currentUser) {
+        alert("Erro: Você precisa estar logado para se inscrever.");
+        return;
+      }
+
+      // 2. Feedback visual imediato
+      joinTournamentBtn.disabled = true;
+      trnMessage.textContent = "Processando inscrição...";
+      trnMessage.style.color = "#f39c12"; // Laranja
+
+      try {
+        const res = await fetch("/api/tournament/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: currentUser.email }),
+        });
+        const data = await res.json();
+
+        trnMessage.textContent = data.message;
+        if (res.ok) {
+          // SUCESSO
+          trnMessage.style.color = "#2ecc71"; // Verde
+          alert("✅ Inscrição realizada com sucesso! Boa sorte!");
+
+          // Atualiza saldo localmente
+          currentUser.saldo = data.newSaldo;
+          updateLobbyWelcome();
+          updateTournamentStatus();
+        } else {
+          // ERRO (Saldo insuficiente, já inscrito, etc)
+          trnMessage.style.color = "#e74c3c"; // Vermelho
+          alert("⚠️ " + data.message); // Alerta para garantir que o usuário veja
+          joinTournamentBtn.disabled = false;
+        }
+      } catch (e) {
+        console.error(e);
+        trnMessage.textContent = "Erro de conexão ao inscrever.";
+        trnMessage.style.color = "#e74c3c";
+        alert("❌ Erro de conexão ao tentar se inscrever. Tente novamente.");
+        joinTournamentBtn.disabled = false;
+      }
+    });
+  }
+
+  // NOVO: LISTENER PARA O BOTÃO DE SAIR
+  if (leaveTournamentBtn) {
+    leaveTournamentBtn.addEventListener("click", async () => {
+      if (!currentUser) return;
+      if (
+        !confirm("Deseja realmente sair do torneio? O valor será reembolsado.")
+      )
+        return;
+
+      leaveTournamentBtn.disabled = true;
+      trnMessage.textContent = "Processando saída...";
+      trnMessage.style.color = "#f39c12";
+
+      try {
+        const res = await fetch("/api/tournament/leave", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: currentUser.email }),
+        });
+        const data = await res.json();
+
+        trnMessage.textContent = data.message;
+        if (res.ok) {
+          trnMessage.style.color = "#2ecc71";
+          alert("✅ Inscrição cancelada. Valor reembolsado.");
+          currentUser.saldo = data.newSaldo;
+          updateLobbyWelcome();
+          updateTournamentStatus();
+        } else {
+          trnMessage.style.color = "#e74c3c";
+          alert("⚠️ " + data.message);
+          leaveTournamentBtn.disabled = false;
+        }
+      } catch (e) {
+        console.error(e);
+        trnMessage.textContent = "Erro ao sair.";
+        leaveTournamentBtn.disabled = false;
+      }
+    });
+  }
+
   const setupModalLogic = () => {
+    // ... (Mantém lógica anterior de modais: history, pix, referrals, withdraw)
     const viewHistoryBtn = document.getElementById("view-history-btn");
     if (viewHistoryBtn) {
       viewHistoryBtn.addEventListener("click", async () => {
@@ -700,7 +841,9 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.removeItem("checkersCurrentRoom");
 
     UI.returnToLobbyScreen();
-    if (currentUser) socket.emit("enterLobby");
+    // Esconde indicador de torneio se estiver visível
+    document.getElementById("tournament-indicator").classList.add("hidden");
+    if (currentUser) socket.emit("enterLobby", currentUser);
   }
 
   async function processGameUpdate(gameState, suppressSound = false) {
@@ -762,7 +905,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   socket.on("connect", () => {
-    if (currentUser) socket.emit("enterLobby");
+    if (currentUser) socket.emit("enterLobby", currentUser);
     const savedRoom = localStorage.getItem("checkersCurrentRoom");
     if (currentUser && savedRoom) {
       currentRoom = savedRoom;
@@ -786,6 +929,108 @@ document.addEventListener("DOMContentLoaded", () => {
     UI.renderOpenRooms(data.waiting);
     UI.renderActiveRooms(data.active);
   });
+
+  // --- NOVOS LISTENERS DE TORNEIO ---
+  socket.on("tournamentUpdate", (data) => {
+    const countEl = document.getElementById("trn-participants-count");
+    const prizeEl = document.getElementById("trn-prize-pool");
+    if (countEl) countEl.textContent = `Inscritos: ${data.participantsCount}`;
+    if (prizeEl)
+      prizeEl.textContent = `Prêmio Atual: R$ ${data.prizePool.toFixed(2)}`;
+  });
+
+  socket.on("tournamentStarted", (data) => {
+    // Exibe bracket
+    showTournamentBracket(data.bracket, 1);
+  });
+
+  socket.on("tournamentMatchReady", (data) => {
+    if (!currentUser) return;
+    if (
+      data.player1 === currentUser.email ||
+      data.player2 === currentUser.email
+    ) {
+      // Entra no jogo automaticamente
+      socket.emit("rejoinActiveGame", {
+        roomCode: data.roomCode,
+        user: currentUser,
+      });
+      // Esconde o bracket se estiver aberto
+      document
+        .getElementById("tournament-bracket-overlay")
+        .classList.add("hidden");
+      // Mostra tela de jogo
+      UI.elements.lobbyContainer.classList.add("hidden");
+      UI.elements.gameContainer.classList.remove("hidden");
+      // Marca como jogo de torneio
+      document
+        .getElementById("tournament-indicator")
+        .classList.remove("hidden");
+    }
+  });
+
+  socket.on("tournamentRoundUpdate", (data) => {
+    showTournamentBracket(data.bracket, data.round);
+  });
+
+  socket.on("tournamentEnded", (data) => {
+    alert(
+      `Torneio Finalizado!\nCampeão: ${
+        data.winner
+      } (+R$ ${data.championPrize.toFixed(2)})\nVice: ${
+        data.runnerUp
+      } (+R$ ${data.runnerUpPrize.toFixed(2)})`
+    );
+    updateTournamentStatus();
+    updateLobbyWelcome();
+  });
+
+  socket.on("tournamentCancelled", (data) => {
+    alert(data.message);
+    updateTournamentStatus();
+    updateLobbyWelcome(); // Atualiza saldo devolvido
+  });
+
+  function showTournamentBracket(matches, round) {
+    const overlay = document.getElementById("tournament-bracket-overlay");
+    const list = document.getElementById("tournament-matches-list");
+    const roundTitle = document.getElementById("tournament-round-display");
+    const closeBtn = document.getElementById("close-bracket-btn");
+
+    overlay.classList.remove("hidden");
+
+    // Texto da rodada
+    if (matches.length === 4) roundTitle.textContent = "Quartas de Final";
+    else if (matches.length === 2) roundTitle.textContent = "Semifinais";
+    else if (matches.length === 1) roundTitle.textContent = "GRANDE FINAL";
+    else roundTitle.textContent = `Rodada ${round}`;
+
+    list.innerHTML = "";
+    matches.forEach((m) => {
+      const div = document.createElement("div");
+      div.className = "tournament-match-card";
+
+      const p1 = m.player1 ? m.player1.split("@")[0] : "Aguardando";
+      const p2 = m.player2 ? m.player2.split("@")[0] : "Bye"; // Bye = Passagem direta
+
+      let p1Class = "t-player";
+      let p2Class = "t-player";
+
+      if (m.winner === m.player1) p1Class += " t-winner";
+      if (m.winner === m.player2) p2Class += " t-winner";
+
+      div.innerHTML = `
+        <span class="${p1Class}">${p1}</span>
+        <span class="t-vs">VS</span>
+        <span class="${p2Class}">${p2}</span>
+      `;
+      list.appendChild(div);
+    });
+
+    closeBtn.onclick = () => overlay.classList.add("hidden");
+  }
+
+  // --- FIM NOVOS LISTENERS ---
 
   socket.on("joinError", (data) => {
     if (UI.elements.lobbyErrorMessage)
@@ -923,9 +1168,23 @@ document.addEventListener("DOMContentLoaded", () => {
         "spectator-end-message"
       ).textContent = `${wText} venceram! ${data.reason}`;
     } else {
-      if (data.winner === myColor)
-        document.getElementById("winner-screen").classList.remove("hidden");
-      else document.getElementById("loser-screen").classList.remove("hidden");
+      if (data.isTournament) {
+        // Logica especial para torneio (vencedor avança)
+        if (data.winner === myColor) {
+          document.getElementById("winner-screen").classList.remove("hidden");
+          // Remove botões de revanche em torneio
+          document.querySelector("#winner-screen .revanche-btn").style.display =
+            "none";
+        } else {
+          document.getElementById("loser-screen").classList.remove("hidden");
+          document.querySelector("#loser-screen .revanche-btn").style.display =
+            "none";
+        }
+      } else {
+        if (data.winner === myColor)
+          document.getElementById("winner-screen").classList.remove("hidden");
+        else document.getElementById("loser-screen").classList.remove("hidden");
+      }
     }
   });
 
@@ -970,12 +1229,7 @@ document.addEventListener("DOMContentLoaded", () => {
   socket.on("updateSaldo", (d) => {
     if (currentUser) {
       currentUser.saldo = d.newSaldo;
-      const welcomeMsg = document.getElementById("lobby-welcome-message");
-      if (welcomeMsg) {
-        welcomeMsg.textContent = `Bem-vindo, ${
-          currentUser.email
-        }! Saldo: R$ ${currentUser.saldo.toFixed(2)}`;
-      }
+      updateLobbyWelcome();
     }
   });
 
@@ -983,13 +1237,7 @@ document.addEventListener("DOMContentLoaded", () => {
   socket.on("balanceUpdate", (data) => {
     if (currentUser && data.email === currentUser.email) {
       currentUser.saldo = data.newSaldo;
-
-      const welcomeMsg = document.getElementById("lobby-welcome-message");
-      if (welcomeMsg) {
-        welcomeMsg.textContent = `Bem-vindo, ${
-          currentUser.email
-        }! Saldo: R$ ${currentUser.saldo.toFixed(2)}`;
-      }
+      updateLobbyWelcome();
 
       if (
         document.getElementById("pix-overlay").classList.contains("hidden") ===
@@ -1001,6 +1249,15 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
   });
+
+  function updateLobbyWelcome() {
+    const welcomeMsg = document.getElementById("lobby-welcome-message");
+    if (welcomeMsg && currentUser) {
+      welcomeMsg.textContent = `Bem-vindo, ${
+        currentUser.email
+      }! Saldo: R$ ${currentUser.saldo.toFixed(2)}`;
+    }
+  }
 
   socket.on("drawRequestSent", () => {
     document.getElementById("draw-btn").disabled = true;
@@ -1083,11 +1340,8 @@ document.addEventListener("DOMContentLoaded", () => {
           currentUser = data.user;
           document.getElementById("main-container").classList.add("hidden");
           document.getElementById("lobby-container").classList.remove("hidden");
-          document.getElementById(
-            "lobby-welcome-message"
-          ).textContent = `Bem-vindo, ${
-            currentUser.email
-          }! Saldo: R$ ${currentUser.saldo.toFixed(2)}`;
+          updateLobbyWelcome();
+          updateTournamentStatus();
           socket.connect();
         } else {
           localStorage.removeItem("checkersUserEmail");
