@@ -258,6 +258,7 @@ app.post("/api/payment/create_preference", async (req, res) => {
     const backUrl = `${protocol}://${host}/`;
 
     // ### ALTERAÇÃO AQUI: EXCLUINDO TUDO MENOS PIX ###
+    // Corrigi a lista para usar apenas IDs de exclusão válidos e evitar erro da API
     const result = await preference.create({
       body: {
         items: [
@@ -273,9 +274,8 @@ app.post("/api/payment/create_preference", async (req, res) => {
             { id: "ticket" }, // Boleto
             { id: "credit_card" }, // Cartão de Crédito
             { id: "debit_card" }, // Cartão de Débito
-            { id: "account_money" }, // ### NOVO: Bloqueia pagamento com Saldo MP ###
-            { id: "digital_currency" }, // Criptomoedas
-            { id: "digital_wallet" }, // Carteiras digitais
+            { id: "account_money" }, // ### Bloqueia pagamento com Saldo MP ###
+            { id: "prepaid_card" }, // Cartão pré-pago
           ],
           installments: 1,
         },
