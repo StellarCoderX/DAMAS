@@ -18,7 +18,6 @@ const {
   initializeManager,
   setTournamentManager,
 } = require("./src/gameManager");
-// ### NOVO ###
 const tournamentManager = require("./src/tournamentManager");
 
 const app = express();
@@ -172,7 +171,7 @@ app.post("/api/withdraw", async (req, res) => {
   }
 });
 
-// --- ROTA DE TORNEIO (ATUALIZADA) ---
+// --- ROTA DE TORNEIO ---
 app.post("/api/tournament/register", async (req, res) => {
   try {
     const { email } = req.body;
@@ -192,7 +191,6 @@ app.post("/api/tournament/register", async (req, res) => {
   }
 });
 
-// ### NOVO: ROTA PARA SAIR DO TORNEIO ###
 app.post("/api/tournament/leave", async (req, res) => {
   try {
     const { email } = req.body;
@@ -253,6 +251,7 @@ app.post("/api/payment/create_preference", async (req, res) => {
     const notificationUrl = `${protocol}://${host}/api/payment/webhook`;
     const backUrl = `${protocol}://${host}/`;
 
+    // ### ALTERAÇÃO AQUI: EXCLUINDO CARTÕES E BOLETO, DEIXANDO SÓ PIX ###
     const result = await preference.create({
       body: {
         items: [
@@ -264,7 +263,11 @@ app.post("/api/payment/create_preference", async (req, res) => {
           },
         ],
         payment_methods: {
-          excluded_payment_types: [{ id: "ticket" }],
+          excluded_payment_types: [
+            { id: "ticket" }, // Boleto
+            { id: "credit_card" }, // Cartão de Crédito
+            { id: "debit_card" }, // Cartão de Débito
+          ],
           installments: 1,
         },
         external_reference: email,
