@@ -371,21 +371,39 @@ window.initLobby = function (socket, UI) {
       });
     }
 
+    // Botão Fechar Modal de PIX
     document
       .getElementById("close-pix-overlay-btn")
       .addEventListener("click", () => {
         document.getElementById("pix-overlay").classList.add("hidden");
         document.getElementById("mp-loading").classList.add("hidden");
+        document.getElementById("qr-code-container").classList.add("hidden"); // Oculta QR se estiver aberto
+
         const payBtn = document.getElementById("pay-mercadopago-btn");
         if (payBtn) payBtn.disabled = false;
+
         if (paymentCheckInterval) {
           clearInterval(paymentCheckInterval);
           paymentCheckInterval = null;
         }
       });
 
+    // Copiar código PIX
+    document
+      .getElementById("copy-pix-code-btn")
+      .addEventListener("click", () => {
+        const copyText = document.getElementById("pix-copy-paste");
+        copyText.select();
+        copyText.setSelectionRange(0, 99999);
+        document.execCommand("copy");
+        alert("Código PIX copiado!");
+      });
+
     const payBtn = document.getElementById("pay-mercadopago-btn");
     const loadingDiv = document.getElementById("mp-loading");
+    const qrContainer = document.getElementById("qr-code-container");
+    const qrImg = document.getElementById("qr-code-img");
+    const qrText = document.getElementById("pix-copy-paste");
 
     if (payBtn) {
       payBtn.addEventListener("click", async () => {
@@ -412,6 +430,7 @@ window.initLobby = function (socket, UI) {
 
         payBtn.disabled = true;
         loadingDiv.classList.remove("hidden");
+        qrContainer.classList.add("hidden"); // Garante que começa escondido
 
         try {
           const response = await fetch("/api/payment/create_preference", {
@@ -425,12 +444,15 @@ window.initLobby = function (socket, UI) {
 
           const data = await response.json();
 
-          if (data.init_point) {
-            window.open(data.init_point, "_blank");
-            alert(
-              "A aba de pagamento foi aberta! O sistema verificará seu pagamento automaticamente."
-            );
+          if (data.qr_code_base64 && data.qr_code) {
+            // Sucesso! Mostra o QR Code
+            loadingDiv.classList.add("hidden");
+            qrContainer.classList.remove("hidden");
 
+            qrImg.src = `data:image/png;base64,${data.qr_code_base64}`;
+            qrText.value = data.qr_code;
+
+            // Inicia verificação automática
             if (paymentCheckInterval) clearInterval(paymentCheckInterval);
             const initialSaldo = window.currentUser.saldo;
 
@@ -452,10 +474,12 @@ window.initLobby = function (socket, UI) {
                   );
                   clearInterval(paymentCheckInterval);
                   paymentCheckInterval = null;
+
+                  // Reseta o modal
                   document
                     .getElementById("pix-overlay")
                     .classList.add("hidden");
-                  document.getElementById("mp-loading").classList.add("hidden");
+                  qrContainer.classList.add("hidden");
                   payBtn.disabled = false;
                 }
               } catch (err) {
@@ -470,6 +494,7 @@ window.initLobby = function (socket, UI) {
             loadingDiv.classList.add("hidden");
           }
         } catch (error) {
+          console.error(error);
           alert("Erro de conexão.");
           payBtn.disabled = false;
           loadingDiv.classList.add("hidden");
