@@ -11,7 +11,8 @@ const MatchHistory = require("./models/MatchHistory");
 const Transaction = require("./models/Transaction");
 const bcrypt = require("bcryptjs");
 
-const { MercadoPagoConfig, Preference, Payment } = require("mercadopago");
+// Importação do SDK
+const { MercadoPagoConfig, Payment } = require("mercadopago");
 
 const { initializeSocket, gameRooms } = require("./src/socketHandlers");
 const {
@@ -235,7 +236,7 @@ app.get("/api/tournament/status", async (req, res) => {
   }
 });
 
-// --- PAGAMENTO MERCADO PAGO ---
+// --- PAGAMENTO MERCADO PAGO (AGORA GERA PIX DIRETO) ---
 app.post("/api/payment/create_preference", async (req, res) => {
   try {
     if (!client)
@@ -245,68 +246,110 @@ app.post("/api/payment/create_preference", async (req, res) => {
     if (!amountNum || amountNum < 1)
       return res.status(400).json({ message: "Valor mínimo de R$ 1,00" });
 
-    const preference = new Preference(client);
+    // ### REAJUSTE DE TAXA: Adiciona 1% ao valor total ###
+    const amountWithFee = amountNum * 1.01;
+    // Arredonda para 2 casas decimais
+    const finalAmountToPay = Math.round(amountWithFee * 100) / 100;
+
     const protocol = req.headers["x-forwarded-proto"] || "http";
     const host = req.headers.host;
     const notificationUrl = `${protocol}://${host}/api/payment/webhook`;
-    const backUrl = `${protocol}://${host}/`;
 
-    // ### ALTERAÇÃO AQUI: EXCLUINDO CARTÕES E BOLETO, DEIXANDO SÓ PIX ###
-    const result = await preference.create({
-      body: {
-        items: [
-          {
-            title: "Créditos - Damas Online",
-            quantity: 1,
-            unit_price: amountNum,
-            currency_id: "BRL",
-          },
-        ],
-        payment_methods: {
-          excluded_payment_types: [
-            { id: "ticket" }, // Boleto
-            { id: "credit_card" }, // Cartão de Crédito
-            { id: "debit_card" }, // Cartão de Débito
-          ],
-          installments: 1,
-        },
-        external_reference: email,
-        notification_url: notificationUrl,
-        back_urls: { success: backUrl, failure: backUrl, pending: backUrl },
-        auto_return: "approved",
+    // ### CRIAÇÃO DIRETA DE PAGAMENTO PIX ###
+    const payment = new Payment(client);
+
+    // Geração de ID único para idempotência (evitar duplicação se usuário clicar rápido)
+    const idempotencyKey = `${email}-${Date.now()}`;
+
+    const body = {
+      transaction_amount: finalAmountToPay,
+      description: `Créditos Damas (${amountNum.toFixed(2)})`,
+      payment_method_id: "pix",
+      payer: {
+        email: email,
       },
+      // Passa os dados para o webhook saber quem creditar
+      external_reference: JSON.stringify({
+        email: email,
+        credits: amountNum,
+      }),
+      notification_url: notificationUrl,
+    };
+
+    const result = await payment.create({
+      body,
+      requestOptions: { idempotencyKey },
     });
-    res.json({ init_point: result.init_point });
+
+    // Extrai o QR Code e o Código Copia e Cola
+    const pointOfInteraction = result.point_of_interaction;
+    const transactionData = pointOfInteraction
+      ? pointOfInteraction.transaction_data
+      : null;
+
+    if (transactionData) {
+      res.json({
+        qr_code: transactionData.qr_code, // Código "Copia e Cola"
+        qr_code_base64: transactionData.qr_code_base64, // Imagem Base64
+        payment_id: result.id,
+      });
+    } else {
+      throw new Error("Dados do PIX não retornados pelo Mercado Pago.");
+    }
   } catch (error) {
-    res.status(500).json({ message: "Erro ao gerar pagamento." });
+    console.error("Erro MP (PIX):", error);
+    res.status(500).json({ message: "Erro ao gerar PIX. Tente novamente." });
   }
 });
 
 app.post("/api/payment/webhook", async (req, res) => {
   const { data, type } = req.body;
   res.sendStatus(200);
-  if (type === "payment" || req.body.action === "payment.created") {
+
+  // Ouve notificações de pagamento (v1 ou v2)
+  const isPayment =
+    type === "payment" ||
+    req.body.action === "payment.created" ||
+    req.body.action === "payment.updated";
+
+  if (isPayment) {
     try {
       if (!client) return;
       const paymentId = data ? data.id : req.body.data.id;
       const paymentClient = new Payment(client);
       const payment = await paymentClient.get({ id: paymentId });
+
       if (payment && payment.status === "approved") {
-        const userEmail = payment.external_reference;
-        const amount = payment.transaction_amount;
         const paymentIdStr = payment.id.toString();
         const existingTx = await Transaction.findOne({
           paymentId: paymentIdStr,
         });
         if (existingTx) return;
 
+        let userEmail = null;
+        let creditsToAdd = 0;
+
+        try {
+          const refData = JSON.parse(payment.external_reference);
+          if (refData && refData.email) {
+            userEmail = refData.email;
+            creditsToAdd = Number(refData.credits);
+          }
+        } catch (e) {
+          userEmail = payment.external_reference;
+          creditsToAdd = payment.transaction_amount;
+        }
+
+        if (!userEmail) return;
+
         const user = await User.findOne({ email: userEmail.toLowerCase() });
         if (user) {
-          user.saldo += amount;
+          user.saldo += creditsToAdd;
+
           if (!user.hasDeposited) {
-            user.firstDepositValue = amount;
+            user.firstDepositValue = creditsToAdd;
             user.hasDeposited = true;
-            if (amount >= 5 && user.referredBy) {
+            if (creditsToAdd >= 5 && user.referredBy) {
               const referrer = await User.findOne({ email: user.referredBy });
               if (referrer) {
                 referrer.saldo += 1;
@@ -315,13 +358,16 @@ app.post("/api/payment/webhook", async (req, res) => {
               }
             }
           }
+
           await user.save();
+
           await Transaction.create({
             paymentId: paymentIdStr,
             email: userEmail,
-            amount: amount,
+            amount: creditsToAdd,
             status: payment.status,
           });
+
           io.emit("balanceUpdate", { email: userEmail, newSaldo: user.saldo });
         }
       }
@@ -345,14 +391,41 @@ const adminAuthHeader = (req, res, next) => {
 app.put("/api/admin/add-saldo-bonus", adminAuthBody, async (req, res) => {
   try {
     const { email, amountToAdd } = req.body;
+    const amountVal = Number(amountToAdd);
     const user = await User.findOne({ email: email.toLowerCase() });
+
     if (!user)
       return res.status(404).json({ message: "Usuário não encontrado." });
-    user.saldo += Number(amountToAdd);
+
+    user.saldo += amountVal;
+
+    if (!user.hasDeposited && amountVal > 0) {
+      user.firstDepositValue = amountVal;
+      user.hasDeposited = true;
+
+      if (amountVal >= 5 && user.referredBy) {
+        const referrer = await User.findOne({ email: user.referredBy });
+        if (referrer) {
+          referrer.saldo += 1.0;
+          referrer.referralEarnings += 1.0;
+          await referrer.save();
+          io.emit("balanceUpdate", {
+            email: referrer.email,
+            newSaldo: referrer.saldo,
+          });
+        }
+      }
+    }
+
     await user.save();
-    res.json({ message: "Sucesso." });
+    io.emit("balanceUpdate", { email: user.email, newSaldo: user.saldo });
+
+    res.json({
+      message: "Saldo adicionado e bônus processado (se aplicável).",
+    });
   } catch (e) {
-    res.status(500).json({ message: "Erro." });
+    console.error(e);
+    res.status(500).json({ message: "Erro ao processar saldo." });
   }
 });
 app.get("/api/admin/users", adminAuthHeader, async (req, res) => {
@@ -407,7 +480,7 @@ app.post("/api/admin/reset-all-saldos", adminAuthBody, async (req, res) => {
 // Inicialização
 initializeManager(io, gameRooms);
 tournamentManager.initializeTournamentManager(io);
-setTournamentManager(tournamentManager); // Injeta a dependência circular
+setTournamentManager(tournamentManager);
 initializeSocket(io);
 
 const HOST = process.env.HOST || "0.0.0.0";
