@@ -245,6 +245,11 @@ app.post("/api/payment/create_preference", async (req, res) => {
     if (!amountNum || amountNum < 1)
       return res.status(400).json({ message: "Valor mínimo de R$ 1,00" });
 
+    // ### REAJUSTE DE TAXA: Adiciona 1% ao valor total ###
+    const amountWithFee = amountNum * 1.01;
+    // Arredonda para 2 casas decimais
+    const finalAmountToPay = Math.round(amountWithFee * 100) / 100;
+
     const preference = new Preference(client);
     const protocol = req.headers["x-forwarded-proto"] || "http";
     const host = req.headers.host;
@@ -256,9 +261,9 @@ app.post("/api/payment/create_preference", async (req, res) => {
       body: {
         items: [
           {
-            title: "Créditos - Damas Online",
+            title: `Créditos Damas (${amountNum.toFixed(2)}) + Taxa`,
             quantity: 1,
-            unit_price: amountNum,
+            unit_price: finalAmountToPay, // Cobra o valor com taxa
             currency_id: "BRL",
           },
         ],
@@ -270,7 +275,11 @@ app.post("/api/payment/create_preference", async (req, res) => {
           ],
           installments: 1,
         },
-        external_reference: email,
+        // Salva email E valor original dos créditos no external_reference
+        external_reference: JSON.stringify({
+          email: email,
+          credits: amountNum,
+        }),
         notification_url: notificationUrl,
         back_urls: { success: backUrl, failure: backUrl, pending: backUrl },
         auto_return: "approved",
@@ -278,6 +287,7 @@ app.post("/api/payment/create_preference", async (req, res) => {
     });
     res.json({ init_point: result.init_point });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Erro ao gerar pagamento." });
   }
 });
@@ -291,22 +301,45 @@ app.post("/api/payment/webhook", async (req, res) => {
       const paymentId = data ? data.id : req.body.data.id;
       const paymentClient = new Payment(client);
       const payment = await paymentClient.get({ id: paymentId });
+
       if (payment && payment.status === "approved") {
-        const userEmail = payment.external_reference;
-        const amount = payment.transaction_amount;
         const paymentIdStr = payment.id.toString();
         const existingTx = await Transaction.findOne({
           paymentId: paymentIdStr,
         });
         if (existingTx) return;
 
+        let userEmail = null;
+        let creditsToAdd = 0;
+
+        // Tenta extrair dados do external_reference (JSON ou String legada)
+        try {
+          // Verifica se é JSON (novo formato com créditos definidos)
+          const refData = JSON.parse(payment.external_reference);
+          if (refData && refData.email) {
+            userEmail = refData.email;
+            creditsToAdd = Number(refData.credits);
+          }
+        } catch (e) {
+          // Se falhar o parse, assume formato antigo (apenas email)
+          // Nesse caso, o valor creditado será o valor PAGO (sem desconto de taxa na lógica legada)
+          // ou podemos aplicar a lógica reversa se quisermos forçar a taxa em tudo.
+          // Para segurança, vamos assumir que se não tem JSON, é o valor pago total.
+          userEmail = payment.external_reference;
+          creditsToAdd = payment.transaction_amount;
+        }
+
+        if (!userEmail) return;
+
         const user = await User.findOne({ email: userEmail.toLowerCase() });
         if (user) {
-          user.saldo += amount;
+          user.saldo += creditsToAdd;
+
           if (!user.hasDeposited) {
-            user.firstDepositValue = amount;
+            user.firstDepositValue = creditsToAdd;
             user.hasDeposited = true;
-            if (amount >= 5 && user.referredBy) {
+            // Bônus de indicação
+            if (creditsToAdd >= 5 && user.referredBy) {
               const referrer = await User.findOne({ email: user.referredBy });
               if (referrer) {
                 referrer.saldo += 1;
@@ -315,13 +348,16 @@ app.post("/api/payment/webhook", async (req, res) => {
               }
             }
           }
+
           await user.save();
+
           await Transaction.create({
             paymentId: paymentIdStr,
             email: userEmail,
-            amount: amount,
+            amount: creditsToAdd, // Salva o valor de CRÉDITOS, não o pago com taxa
             status: payment.status,
           });
+
           io.emit("balanceUpdate", { email: userEmail, newSaldo: user.saldo });
         }
       }
