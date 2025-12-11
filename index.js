@@ -1,4 +1,4 @@
-// index.js (COM RETORNO AUTOMÁTICO ATIVADO PARA PRODUÇÃO)
+// index.js (ORDEM DE SEGURANÇA NO WEBHOOK)
 require("dotenv").config();
 
 const express = require("express");
@@ -17,8 +17,6 @@ const { initializeSocket, gameRooms } = require("./src/socketHandlers");
 const { initializeManager } = require("./src/gameManager");
 
 const app = express();
-
-// IMPORTANTE: Confia no proxy do Fly.io para saber que é HTTPS
 app.set("trust proxy", 1);
 
 const server = http.createServer(app);
@@ -205,7 +203,6 @@ app.post("/api/payment/create_preference", async (req, res) => {
 
     const preference = new Preference(client);
 
-    // Detecta protocolo e host para URLs de retorno
     const protocol = req.headers["x-forwarded-proto"] || "http";
     const host = req.headers.host;
 
@@ -224,7 +221,6 @@ app.post("/api/payment/create_preference", async (req, res) => {
             currency_id: "BRL",
           },
         ],
-        // payer removido para permitir pagamento sem login (Convidado)
         payment_methods: {
           excluded_payment_types: [
             { id: "ticket" },
@@ -236,13 +232,11 @@ app.post("/api/payment/create_preference", async (req, res) => {
         external_reference: email,
         notification_url: notificationUrl,
 
-        // Configuração de Retorno
         back_urls: {
           success: backUrl,
           failure: backUrl,
           pending: backUrl,
         },
-        // ### REATIVADO: Redireciona automaticamente após pagamento aprovado ###
         auto_return: "approved",
       },
     });
@@ -262,7 +256,6 @@ app.post("/api/payment/create_preference", async (req, res) => {
 app.post("/api/payment/webhook", async (req, res) => {
   const { data, type } = req.body;
 
-  // Responde rápido para o MP
   res.sendStatus(200);
 
   if (type === "payment" || req.body.action === "payment.created") {
@@ -287,13 +280,7 @@ app.post("/api/payment/webhook", async (req, res) => {
           return;
         }
 
-        await Transaction.create({
-          paymentId: paymentIdStr,
-          email: userEmail,
-          amount: amount,
-          status: payment.status,
-        });
-
+        // ### ATUALIZAÇÃO SEGURA: Salva o usuário PRIMEIRO ###
         const user = await User.findOne({ email: userEmail.toLowerCase() });
         if (user) {
           user.saldo += amount;
@@ -316,7 +303,15 @@ app.post("/api/payment/webhook", async (req, res) => {
           await user.save();
           console.log(`[Depósito] R$ ${amount} para ${userEmail}`);
 
-          // Notifica Frontend (caso o usuário esteja com a aba aberta em outro lugar)
+          // SÓ DEPOIS grava a transação (para garantir que se o usuário falhar, o webhook tenta de novo)
+          await Transaction.create({
+            paymentId: paymentIdStr,
+            email: userEmail,
+            amount: amount,
+            status: payment.status,
+          });
+
+          // Avisa o Frontend (Socket)
           io.emit("balanceUpdate", { email: userEmail, newSaldo: user.saldo });
         }
       }

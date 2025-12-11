@@ -14,6 +14,9 @@ document.addEventListener("DOMContentLoaded", () => {
   let drawCooldownInterval = null;
   let isSpectator = false;
 
+  // ### NOVO: Variável para controlar a verificação de pagamento ###
+  let paymentCheckInterval = null;
+
   let lastPacketTime = Date.now();
   let watchdogInterval = null;
 
@@ -199,7 +202,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   const setupModalLogic = () => {
-    // ... (Mantendo código anterior inalterado onde não há mudanças)
     const viewHistoryBtn = document.getElementById("view-history-btn");
     if (viewHistoryBtn) {
       viewHistoryBtn.addEventListener("click", async () => {
@@ -260,16 +262,25 @@ document.addEventListener("DOMContentLoaded", () => {
     if (addBalanceBtn) {
       addBalanceBtn.addEventListener("click", () => {
         document.getElementById("pix-overlay").classList.remove("hidden");
-        // ...
       });
     }
+
+    // CORREÇÃO: Limpar o intervalo de verificação ao fechar o modal
     document
       .getElementById("close-pix-overlay-btn")
       .addEventListener("click", () => {
         document.getElementById("pix-overlay").classList.add("hidden");
+        document.getElementById("mp-loading").classList.add("hidden");
+        const payBtn = document.getElementById("pay-mercadopago-btn");
+        if (payBtn) payBtn.disabled = false;
+
+        if (paymentCheckInterval) {
+          clearInterval(paymentCheckInterval);
+          paymentCheckInterval = null;
+        }
       });
 
-    // LÓGICA DO PAGAMENTO MERCADO PAGO
+    // ### LÓGICA DO PAGAMENTO MERCADO PAGO COM POLLING ###
     const payBtn = document.getElementById("pay-mercadopago-btn");
     const loadingDiv = document.getElementById("mp-loading");
 
@@ -297,7 +308,61 @@ document.addEventListener("DOMContentLoaded", () => {
           const data = await response.json();
 
           if (data.init_point) {
-            window.location.href = data.init_point;
+            // Abre o Mercado Pago em uma NOVA ABA para não fechar o jogo
+            window.open(data.init_point, "_blank");
+
+            alert(
+              "A aba de pagamento foi aberta! O sistema verificará seu pagamento automaticamente."
+            );
+
+            // ### INÍCIO DA VERIFICAÇÃO AUTOMÁTICA (POLLING) ###
+            if (paymentCheckInterval) clearInterval(paymentCheckInterval);
+
+            const initialSaldo = currentUser.saldo;
+
+            paymentCheckInterval = setInterval(async () => {
+              try {
+                // Verifica o saldo silenciosamente
+                const checkRes = await fetch("/api/user/re-authenticate", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ email: currentUser.email }),
+                });
+                const checkData = await checkRes.json();
+
+                if (checkData.user && checkData.user.saldo > initialSaldo) {
+                  // O SALDO AUMENTOU! SUCESSO!
+                  currentUser = checkData.user;
+
+                  // Atualiza UI
+                  const welcomeMsg = document.getElementById(
+                    "lobby-welcome-message"
+                  );
+                  if (welcomeMsg) {
+                    welcomeMsg.textContent = `Bem-vindo, ${
+                      currentUser.email
+                    }! Saldo: R$ ${currentUser.saldo.toFixed(2)}`;
+                  }
+
+                  alert(
+                    `Pagamento confirmado! R$ ${amount.toFixed(
+                      2
+                    )} foram adicionados.`
+                  );
+
+                  // Limpa tudo e fecha modal
+                  clearInterval(paymentCheckInterval);
+                  paymentCheckInterval = null;
+                  document
+                    .getElementById("pix-overlay")
+                    .classList.add("hidden");
+                  document.getElementById("mp-loading").classList.add("hidden");
+                  payBtn.disabled = false;
+                }
+              } catch (err) {
+                console.error("Erro na verificação de saldo:", err);
+              }
+            }, 5000); // Verifica a cada 5 segundos
           } else {
             alert(
               "Erro ao criar pagamento: " + (data.message || "Tente novamente.")
@@ -327,7 +392,6 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("withdraw-overlay").classList.add("hidden");
       });
 
-    // ... (Outros botões)
     const copyReferralBtn = document.getElementById("copy-referral-btn");
     if (copyReferralBtn) {
       copyReferralBtn.addEventListener("click", () => {
@@ -354,7 +418,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const viewReferralsBtn = document.getElementById("view-referrals-btn");
     if (viewReferralsBtn) {
       viewReferralsBtn.addEventListener("click", async () => {
-        // ... (Lógica de referrals mantida)
         if (!currentUser) return;
         document.getElementById("referrals-overlay").classList.remove("hidden");
         const list = document.getElementById("referrals-list");
@@ -409,81 +472,47 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   setupModalLogic();
 
-  // ... (Listeners de jogo mantidos)
+  document.getElementById("accept-bet-btn").addEventListener("click", () => {
+    if (tempRoomCode && currentUser) {
+      isSpectator = false;
+      socket.emit("acceptBet", { roomCode: tempRoomCode, user: currentUser });
+      document.getElementById("confirm-bet-overlay").classList.add("hidden");
+    }
+  });
+  document.getElementById("decline-bet-btn").addEventListener("click", () => {
+    document.getElementById("confirm-bet-overlay").classList.add("hidden");
+    tempRoomCode = null;
+  });
 
-  // ### LÓGICA DE UPDATE DE SALDO (CORRIGIDA) ###
-  socket.on("updateSaldo", (d) => {
-    if (currentUser) {
-      currentUser.saldo = d.newSaldo;
-      // Atualiza o texto visualmente
-      const welcomeMsg = document.getElementById("lobby-welcome-message");
-      if (welcomeMsg) {
-        welcomeMsg.textContent = `Bem-vindo, ${
-          currentUser.email
-        }! Saldo: R$ ${currentUser.saldo.toFixed(2)}`;
-      }
+  document.getElementById("resign-btn").addEventListener("click", () => {
+    if (currentRoom && !isSpectator && confirm("Deseja desistir?"))
+      socket.emit("playerResign");
+  });
+  document.getElementById("draw-btn").addEventListener("click", () => {
+    if (currentRoom && !isSpectator) {
+      document.getElementById("draw-btn").disabled = true;
+      socket.emit("requestDraw", { roomCode: currentRoom });
+    }
+  });
+  document
+    .getElementById("spectator-leave-btn")
+    .addEventListener("click", () => {
+      socket.emit("leaveEndGameScreen", { roomCode: currentRoom });
+      returnToLobbyLogic();
+    });
+  document.getElementById("accept-draw-btn").addEventListener("click", () => {
+    if (currentRoom) {
+      socket.emit("acceptDraw", { roomCode: currentRoom });
+      document.getElementById("draw-request-overlay").classList.add("hidden");
+    }
+  });
+  document.getElementById("decline-draw-btn").addEventListener("click", () => {
+    if (currentRoom) {
+      socket.emit("declineDraw", { roomCode: currentRoom });
+      document.getElementById("draw-request-overlay").classList.add("hidden");
     }
   });
 
-  // ### NOVO: LÓGICA DE AVISO DE PAGAMENTO (WEBHOOK) ###
-  socket.on("balanceUpdate", (data) => {
-    if (currentUser && data.email === currentUser.email) {
-      currentUser.saldo = data.newSaldo;
-
-      const welcomeMsg = document.getElementById("lobby-welcome-message");
-      if (welcomeMsg) {
-        welcomeMsg.textContent = `Bem-vindo, ${
-          currentUser.email
-        }! Saldo: R$ ${currentUser.saldo.toFixed(2)}`;
-      }
-
-      alert("Pagamento confirmado! Seu saldo foi atualizado.");
-      document.getElementById("pix-overlay").classList.add("hidden");
-    }
-  });
-
-  // ... (Restante do código mantido: createRoom, joinRoom, etc)
-
-  // Apenas garantindo que o resto das funções (handleBoardClick, etc) continuam aqui.
-  // Vou abreviar as funções que não mudaram para focar na resposta.
-  // No arquivo real, todo o resto do código deve ser mantido.
-
-  // (Bloco de código de eventos socket: roomCreated, etc...)
-  socket.on("roomCreated", (data) => {
-    document.getElementById("room-code-display").textContent = data.roomCode;
-    document.getElementById("waiting-area").classList.remove("hidden");
-  });
-
-  socket.on("roomCancelled", () => UI.resetLobbyUI());
-
-  socket.on("updateLobby", (data) => {
-    UI.renderOpenRooms(data.waiting);
-    UI.renderActiveRooms(data.active);
-  });
-
-  socket.on("joinError", (data) => {
-    if (UI.elements.lobbyErrorMessage)
-      UI.elements.lobbyErrorMessage.textContent = data.message;
-    UI.resetLobbyUI();
-  });
-
-  socket.on("confirmBet", (data) => {
-    document.getElementById("confirm-bet-amount").textContent = data.bet;
-    tempRoomCode = data.roomCode;
-    let modeText =
-      data.gameMode === "tablita"
-        ? "Tablita"
-        : data.gameMode === "international"
-        ? "Internacional 10x10"
-        : "Clássico 8x8";
-    document.getElementById("confirm-game-mode").textContent = modeText;
-    document.getElementById("confirm-bet-overlay").classList.remove("hidden");
-  });
-
-  // ... (Outros eventos socket mantidos) ...
-  // Certifique-se de copiar as funções auxiliares handleBoardClick, selectPieceLogic, etc. do código original.
-
-  // Vou incluir as funções essenciais para garantir que o arquivo esteja completo:
   document.body.addEventListener("click", (e) => {
     if (e.target.classList.contains("revanche-btn")) {
       if (currentRoom && !isSpectator) {
@@ -605,6 +634,109 @@ document.addEventListener("DOMContentLoaded", () => {
     if (currentUser) socket.emit("enterLobby");
   }
 
+  async function processGameUpdate(gameState, suppressSound = false) {
+    if (!gameState || !gameState.boardState) return;
+    lastPacketTime = Date.now();
+
+    if (gameState.lastMove && !suppressSound && !isSpectator) {
+      await UI.animatePieceMove(
+        gameState.lastMove.from,
+        gameState.lastMove.to,
+        gameState.boardSize
+      );
+    } else if (gameState.lastMove && isSpectator) {
+      await UI.animatePieceMove(
+        gameState.lastMove.from,
+        gameState.lastMove.to,
+        gameState.boardSize
+      );
+    }
+
+    let oldPieceCount = 0;
+    boardState.forEach((r) =>
+      r.forEach((p) => {
+        if (p !== 0) oldPieceCount++;
+      })
+    );
+
+    let newPieceCount = 0;
+    gameState.boardState.forEach((r) =>
+      r.forEach((p) => {
+        if (p !== 0) newPieceCount++;
+      })
+    );
+
+    if (!suppressSound && newPieceCount > 0 && oldPieceCount > 0) {
+      if (newPieceCount < oldPieceCount) UI.playAudio("capture");
+      else UI.playAudio("move");
+    }
+
+    boardState = gameState.boardState;
+    UI.renderPieces(boardState, gameState.boardSize);
+
+    if (UI.elements.turnDisplay)
+      UI.elements.turnDisplay.textContent =
+        gameState.currentPlayer === "b" ? "Brancas" : "Pretas";
+
+    UI.highlightLastMove(gameState.lastMove);
+
+    if (!isSpectator) {
+      const isMyTurn =
+        gameState.currentPlayer === (myColor === "b" ? "b" : "p");
+      UI.updateTurnIndicator(isMyTurn);
+      if (isMyTurn && !suppressSound && navigator.vibrate) {
+        try {
+          navigator.vibrate(200);
+        } catch (e) {}
+      }
+    }
+  }
+
+  socket.on("connect", () => {
+    if (currentUser) socket.emit("enterLobby");
+    const savedRoom = localStorage.getItem("checkersCurrentRoom");
+    if (currentUser && savedRoom) {
+      currentRoom = savedRoom;
+      socket.emit("rejoinActiveGame", {
+        roomCode: currentRoom,
+        user: currentUser,
+      });
+      UI.elements.lobbyContainer.classList.add("hidden");
+      UI.elements.gameContainer.classList.remove("hidden");
+    }
+  });
+
+  socket.on("roomCreated", (data) => {
+    document.getElementById("room-code-display").textContent = data.roomCode;
+    document.getElementById("waiting-area").classList.remove("hidden");
+  });
+
+  socket.on("roomCancelled", () => UI.resetLobbyUI());
+
+  socket.on("updateLobby", (data) => {
+    UI.renderOpenRooms(data.waiting);
+    UI.renderActiveRooms(data.active);
+  });
+
+  socket.on("joinError", (data) => {
+    if (UI.elements.lobbyErrorMessage)
+      UI.elements.lobbyErrorMessage.textContent = data.message;
+    UI.resetLobbyUI();
+  });
+
+  socket.on("confirmBet", (data) => {
+    document.getElementById("confirm-bet-amount").textContent = data.bet;
+    tempRoomCode = data.roomCode;
+    let modeText =
+      data.gameMode === "tablita"
+        ? "Tablita"
+        : data.gameMode === "international"
+        ? "Internacional 10x10"
+        : "Clássico 8x8";
+    document.getElementById("confirm-game-mode").textContent = modeText;
+    document.getElementById("confirm-bet-overlay").classList.remove("hidden");
+  });
+
   socket.on("spectatorJoined", (data) => {
     isSpectator = true;
     currentRoom = data.gameState.roomCode;
@@ -667,7 +799,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   socket.on("timerUpdate", (data) => {
-    if (data.roomCode && currentRoom && data.roomCode !== currentRoom) return;
     lastPacketTime = Date.now();
     startWatchdog();
     UI.updateTimer(data);
@@ -765,6 +896,41 @@ document.addEventListener("DOMContentLoaded", () => {
       tEl.textContent = cd;
       if (cd <= 0) clearInterval(nextGameInterval);
     }, 1000);
+  });
+
+  socket.on("updateSaldo", (d) => {
+    if (currentUser) {
+      currentUser.saldo = d.newSaldo;
+      const welcomeMsg = document.getElementById("lobby-welcome-message");
+      if (welcomeMsg) {
+        welcomeMsg.textContent = `Bem-vindo, ${
+          currentUser.email
+        }! Saldo: R$ ${currentUser.saldo.toFixed(2)}`;
+      }
+    }
+  });
+
+  // Também mantemos o aviso por Socket para ficar redundante e seguro
+  socket.on("balanceUpdate", (data) => {
+    if (currentUser && data.email === currentUser.email) {
+      currentUser.saldo = data.newSaldo;
+
+      const welcomeMsg = document.getElementById("lobby-welcome-message");
+      if (welcomeMsg) {
+        welcomeMsg.textContent = `Bem-vindo, ${
+          currentUser.email
+        }! Saldo: R$ ${currentUser.saldo.toFixed(2)}`;
+      }
+
+      if (
+        document.getElementById("pix-overlay").classList.contains("hidden") ===
+        false
+      ) {
+        document.getElementById("pix-overlay").classList.add("hidden");
+        alert("Pagamento confirmado! Saldo atualizado.");
+        if (paymentCheckInterval) clearInterval(paymentCheckInterval);
+      }
+    }
   });
 
   socket.on("drawRequestSent", () => {
