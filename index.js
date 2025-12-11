@@ -381,14 +381,49 @@ const adminAuthHeader = (req, res, next) => {
 app.put("/api/admin/add-saldo-bonus", adminAuthBody, async (req, res) => {
   try {
     const { email, amountToAdd } = req.body;
+    const amountVal = Number(amountToAdd);
     const user = await User.findOne({ email: email.toLowerCase() });
+
     if (!user)
       return res.status(404).json({ message: "Usuário não encontrado." });
-    user.saldo += Number(amountToAdd);
+
+    user.saldo += amountVal;
+
+    // --- CORREÇÃO: LÓGICA DE BÔNUS MANUAL ---
+    // Verifica se o usuário ainda não depositou para processar o bônus
+    if (!user.hasDeposited && amountVal > 0) {
+      user.firstDepositValue = amountVal;
+      user.hasDeposited = true;
+
+      // Se o valor inserido manualmente for >= 5 e houver indicação
+      if (amountVal >= 5 && user.referredBy) {
+        const referrer = await User.findOne({ email: user.referredBy });
+        if (referrer) {
+          referrer.saldo += 1.0; // Adiciona R$ 1,00 ao indicador
+          referrer.referralEarnings += 1.0;
+          await referrer.save();
+
+          // Notifica o indicador se ele estiver online
+          io.emit("balanceUpdate", {
+            email: referrer.email,
+            newSaldo: referrer.saldo,
+          });
+        }
+      }
+    }
+    // ----------------------------------------
+
     await user.save();
-    res.json({ message: "Sucesso." });
+
+    // Notifica o usuário que recebeu o saldo
+    io.emit("balanceUpdate", { email: user.email, newSaldo: user.saldo });
+
+    res.json({
+      message: "Saldo adicionado e bônus processado (se aplicável).",
+    });
   } catch (e) {
-    res.status(500).json({ message: "Erro." });
+    console.error(e);
+    res.status(500).json({ message: "Erro ao processar saldo." });
   }
 });
 app.get("/api/admin/users", adminAuthHeader, async (req, res) => {

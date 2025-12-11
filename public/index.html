@@ -13,6 +13,72 @@
   <link rel="stylesheet" href="style.css" />
   <!-- SDK Mercado Pago -->
   <script src="https://sdk.mercadopago.com/js/v2"></script>
+
+  <style>
+    /* Estilos para os blocos expansíveis */
+    .collapsible-header {
+      cursor: pointer;
+      position: relative;
+      user-select: none;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .collapsible-header::after {
+      content: '▼';
+      position: absolute;
+      right: 15px;
+      font-size: 0.8em;
+      transition: transform 0.3s;
+    }
+
+    .collapsible-header.active::after {
+      transform: rotate(180deg);
+    }
+
+    .collapsible-body {
+      display: none;
+      /* Oculto por padrão */
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Novo estilo para o Cartão de Afiliados */
+    .affiliate-card {
+      background: linear-gradient(135deg, #4b2c50, #7b4397);
+      /* Roxo degradê */
+      border: 2px solid #9b59b6;
+      border-radius: 12px;
+      padding: 0;
+      width: 100%;
+      margin-bottom: 20px;
+      box-shadow: 0 5px 15px rgba(155, 89, 182, 0.2);
+      overflow: hidden;
+    }
+
+    .affiliate-header {
+      background: #9b59b6;
+      color: white;
+      font-weight: 800;
+      padding: 12px;
+      text-align: center;
+      font-size: 1.1rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+  </style>
 </head>
 
 <body>
@@ -65,12 +131,12 @@
   <div id="lobby-container" class="hidden">
     <h2 id="lobby-welcome-message"></h2>
 
-    <!-- ### SEÇÃO TORNEIO ### -->
+    <!-- ### SEÇÃO TORNEIO (EXPANSÍVEL) ### -->
     <div class="tournament-card">
-      <div class="tournament-header">
+      <div class="tournament-header collapsible-header" onclick="toggleSection(this)">
         🏆 TORNEIO DIÁRIO (MATA-MATA) 🏆
       </div>
-      <div class="tournament-body">
+      <div class="tournament-body collapsible-body">
         <p>⏰ Início: <strong>19:00</strong> (Todo dia)</p>
         <p>💰 Inscrição: <strong>R$ 2,00</strong></p>
         <p>👥 Mínimo: 8 Jogadores</p>
@@ -98,16 +164,25 @@
       </div>
     </div>
 
-    <div style="margin-bottom: 15px; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px;">
-      <p style="font-size: 0.9em; margin-bottom: 5px;">💸 Ganhe R$ 1,00 se seu indicado depositar R$ 5,00!</p>
-      <button id="copy-referral-btn"
-        style="background-color: #9b59b6; font-size: 0.9em; padding: 8px; margin-bottom: 5px;">Copiar Link de
-        Indicação</button>
-      <button id="view-referrals-btn" style="background-color: #8e44ad; font-size: 0.9em; padding: 8px;">Minhas
-        Indicações</button>
-      <button id="view-history-btn"
-        style="background-color: #34495e; font-size: 0.9em; padding: 8px; margin-top: 5px;">📜 Histórico de
-        Partidas</button>
+    <!-- ### SEÇÃO AFILIADOS (NOVO BLOCO EXPANSÍVEL) ### -->
+    <div class="affiliate-card">
+      <div class="affiliate-header collapsible-header" onclick="toggleSection(this)">
+        💸 SISTEMA DE INDICAÇÃO 💸
+      </div>
+      <div class="collapsible-body" style="padding: 15px; text-align: center;">
+        <p style="font-size: 0.9em; margin-bottom: 10px; color: #f0f0f0;">
+          Ganhe <strong>R$ 1,00</strong> de bônus sempre que um amigo indicado fizer o primeiro depósito de R$ 5,00 ou
+          mais!
+        </p>
+        <button id="copy-referral-btn"
+          style="background-color: #8e44ad; font-size: 0.9em; padding: 10px; margin-bottom: 5px; width: 100%;">Copiar
+          Link de Indicação</button>
+        <button id="view-referrals-btn"
+          style="background-color: #9b59b6; font-size: 0.9em; padding: 10px; width: 100%;">Minhas Indicações</button>
+        <button id="view-history-btn"
+          style="background-color: #34495e; font-size: 0.9em; padding: 10px; margin-top: 5px; width: 100%;">📜
+          Histórico de Partidas</button>
+      </div>
     </div>
 
     <button id="add-balance-btn">Adicionar Saldo (Automático)</button>
@@ -431,10 +506,25 @@
   <!-- NOVO: Som de entrada na sala (usando move.mp3 como padrão, altere para join.mp3 se tiver o ficheiro) -->
   <audio id="join-sound" src="/sounds/move.mp3" preload="auto"></audio>
 
+  <!-- Script para alternar visibilidade (Acordeão) -->
+  <script>
+    function toggleSection(headerElement) {
+      const body = headerElement.nextElementSibling;
+      headerElement.classList.toggle("active");
+      if (body.style.display === "block") {
+        body.style.display = "none";
+      } else {
+        body.style.display = "block";
+      }
+    }
+  </script>
+
   <script src="/socket.io/socket.io.js"></script>
 
   <script src="gameLogic.js"></script>
   <script src="ui-helpers.js"></script>
+  <!-- Novo arquivo de LOBBY carregado antes do SCRIPT principal -->
+  <script src="lobby.js"></script>
   <script src="script.js"></script>
 </body>
 
