@@ -1,4 +1,4 @@
-// index.js (COM NOTIFICAÇÃO EM TEMPO REAL)
+// index.js (COM RETORNO AUTOMÁTICO ATIVADO PARA PRODUÇÃO)
 require("dotenv").config();
 
 const express = require("express");
@@ -17,12 +17,15 @@ const { initializeSocket, gameRooms } = require("./src/socketHandlers");
 const { initializeManager } = require("./src/gameManager");
 
 const app = express();
+
+// IMPORTANTE: Confia no proxy do Fly.io para saber que é HTTPS
+app.set("trust proxy", 1);
+
 const server = http.createServer(app);
 
 // Configuração do Mercado Pago
-const client = new MercadoPagoConfig({
-  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN,
-});
+const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+const client = accessToken ? new MercadoPagoConfig({ accessToken }) : null;
 
 const io = socketIo(server, {
   cors: {
@@ -35,7 +38,7 @@ const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URI;
 
 if (!MONGO_URI) console.warn("Atenção: MONGO_URI não definida.");
-if (!process.env.MERCADOPAGO_ACCESS_TOKEN)
+if (!accessToken)
   console.warn("Atenção: MERCADOPAGO_ACCESS_TOKEN não definida.");
 
 app.use(express.json());
@@ -184,6 +187,15 @@ app.post("/api/withdraw", async (req, res) => {
 
 app.post("/api/payment/create_preference", async (req, res) => {
   try {
+    if (!client) {
+      console.error(
+        "[MP] Client não inicializado. Verifique MERCADOPAGO_ACCESS_TOKEN."
+      );
+      return res
+        .status(500)
+        .json({ message: "Erro de configuração no servidor." });
+    }
+
     const { amount, email } = req.body;
     const amountNum = Number(amount);
 
@@ -193,8 +205,10 @@ app.post("/api/payment/create_preference", async (req, res) => {
 
     const preference = new Preference(client);
 
+    // Detecta protocolo e host para URLs de retorno
     const protocol = req.headers["x-forwarded-proto"] || "http";
-    const host = req.headers.host || "localhost:3000";
+    const host = req.headers.host;
+
     const notificationUrl = `${protocol}://${host}/api/payment/webhook`;
     const backUrl = `${protocol}://${host}/`;
 
@@ -210,9 +224,7 @@ app.post("/api/payment/create_preference", async (req, res) => {
             currency_id: "BRL",
           },
         ],
-        payer: {
-          email: email,
-        },
+        // payer removido para permitir pagamento sem login (Convidado)
         payment_methods: {
           excluded_payment_types: [
             { id: "ticket" },
@@ -223,30 +235,41 @@ app.post("/api/payment/create_preference", async (req, res) => {
         },
         external_reference: email,
         notification_url: notificationUrl,
+
+        // Configuração de Retorno
         back_urls: {
           success: backUrl,
           failure: backUrl,
           pending: backUrl,
         },
+        // ### REATIVADO: Redireciona automaticamente após pagamento aprovado ###
+        auto_return: "approved",
       },
     });
 
     res.json({ init_point: result.init_point });
   } catch (error) {
-    console.error("[MP] Erro ao criar preferência:", error);
-    res.status(500).json({ message: "Erro ao gerar pagamento." });
+    console.error(
+      "[MP] Erro ao criar preferência:",
+      JSON.stringify(error, null, 2)
+    );
+    res
+      .status(500)
+      .json({ message: "Erro ao gerar pagamento.", error: error.message });
   }
 });
 
 app.post("/api/payment/webhook", async (req, res) => {
   const { data, type } = req.body;
 
+  // Responde rápido para o MP
   res.sendStatus(200);
 
   if (type === "payment" || req.body.action === "payment.created") {
     try {
-      const paymentId = data ? data.id : req.body.data.id;
+      if (!client) return;
 
+      const paymentId = data ? data.id : req.body.data.id;
       const paymentClient = new Payment(client);
       const payment = await paymentClient.get({ id: paymentId });
 
@@ -258,6 +281,7 @@ app.post("/api/payment/webhook", async (req, res) => {
         const existingTx = await Transaction.findOne({
           paymentId: paymentIdStr,
         });
+
         if (existingTx) {
           console.log(`[Webhook] Pagamento ${paymentIdStr} já processado.`);
           return;
@@ -284,24 +308,20 @@ app.post("/api/payment/webhook", async (req, res) => {
                 referrer.saldo += 1;
                 referrer.referralEarnings += 1;
                 await referrer.save();
-                console.log(
-                  `[Bônus] R$ 1,00 creditado para ${referrer.email} por indicação.`
-                );
+                console.log(`[Bônus] R$ 1,00 para ${referrer.email}`);
               }
             }
           }
 
           await user.save();
-          console.log(
-            `[Depósito Automático] R$ ${amount} adicionados para ${userEmail}`
-          );
+          console.log(`[Depósito] R$ ${amount} para ${userEmail}`);
 
-          // ### NOVO: Avisa o Frontend para atualizar o saldo na hora ###
+          // Notifica Frontend (caso o usuário esteja com a aba aberta em outro lugar)
           io.emit("balanceUpdate", { email: userEmail, newSaldo: user.saldo });
         }
       }
     } catch (error) {
-      console.error("[Webhook] Erro ao processar:", error);
+      console.error("[Webhook] Erro:", error);
     }
   }
 });
