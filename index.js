@@ -272,6 +272,7 @@ app.post("/api/payment/create_preference", async (req, res) => {
             { id: "ticket" }, // Boleto
             { id: "credit_card" }, // Cartão de Crédito
             { id: "debit_card" }, // Cartão de Débito
+            { id: "account_money" }, // ### NOVO: Bloqueia pagamento com Saldo MP ###
           ],
           installments: 1,
         },
