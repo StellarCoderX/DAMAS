@@ -30,8 +30,8 @@ window.UI = {
       playersHud: document.getElementById("players-hud"),
       whitePlayerName: document.getElementById("white-player-name"),
       blackPlayerName: document.getElementById("black-player-name"),
-      whitePlayerAvatar: document.getElementById("white-player-avatar"), // NOVO
-      blackPlayerAvatar: document.getElementById("black-player-avatar"), // NOVO
+      whitePlayerAvatar: document.getElementById("white-player-avatar"),
+      blackPlayerAvatar: document.getElementById("black-player-avatar"),
       createRoomBtn: document.getElementById("create-room-btn"),
       betAmountInput: document.getElementById("bet-amount-input"),
       gameModeSelect: document.getElementById("game-mode-select"),
@@ -77,7 +77,6 @@ window.UI = {
       let deltaX = toRect.left - fromRect.left;
       let deltaY = toRect.top - fromRect.top;
 
-      // ### CORREÇÃO DO BUG DAS PRETAS ###
       const isFlipped = this.elements.board.classList.contains("board-flipped");
 
       piece.style.transition = "transform 0.2s ease-in-out";
@@ -120,7 +119,6 @@ window.UI = {
             if (isKing && !existingPiece.classList.contains("king")) {
               existingPiece.classList.add("king");
             }
-            // Limpa estilos de animação para garantir que a peça fique parada corretamente
             existingPiece.style.transform = "";
             existingPiece.style.transition = "";
             existingPiece.style.zIndex = "";
@@ -144,15 +142,26 @@ window.UI = {
     board.innerHTML = "";
     let squareSizeCSS;
 
+    // DETECÇÃO DE DISPOSITIVO (MOBILE VS DESKTOP)
+    const isMobile = window.innerWidth <= 768;
+
     if (boardSize === 10) {
-      squareSizeCSS = "min(50px, 8.5vw)";
-      if (window.innerWidth <= 768) {
+      if (isMobile) {
+        // Mobile: Mantém layout compacto
         squareSizeCSS = "min(36px, 9vw)";
+      } else {
+        // Desktop (Internacional 10x10): Aumenta o tamanho base para ficar mais visível
+        // Usa vmin para garantir que caiba na altura da tela sem scroll
+        squareSizeCSS = "min(65px, 7.5vmin)";
       }
     } else {
-      squareSizeCSS = "min(60px, 10vw)";
-      if (window.innerWidth <= 768) {
+      if (isMobile) {
+        // Mobile (Clássico 8x8)
         squareSizeCSS = "min(45px, 11vw)";
+      } else {
+        // Desktop (Clássico 8x8): Aumenta bastante (de 60px para 80px)
+        // Usa vmin para responsividade vertical
+        squareSizeCSS = "min(80px, 10vmin)";
       }
     }
 
@@ -219,8 +228,7 @@ window.UI = {
         timeText += " (Jogada)";
       }
 
-      // --- NOVO: Exibe avatar do criador ---
-      const creatorName = room.creatorEmail.split("@")[0]; // Pode ser username se atualizado
+      const creatorName = room.creatorEmail.split("@")[0];
       const avatarHtml = room.creatorAvatar
         ? `<img src="${room.creatorAvatar}" style="width:25px; height:25px; border-radius:50%; vertical-align:middle; margin-right:5px; object-fit:cover;">`
         : "";
@@ -387,10 +395,8 @@ window.UI = {
     }
   },
 
-  // --- ATUALIZADO: Mostra Avatares no HUD ---
   updatePlayerNames: function (users) {
     if (!users) return;
-    // Preferência pelo username ou fallback para parte do email
     const whiteName =
       users.whiteName || (users.white ? users.white.split("@")[0] : "Brancas");
     const blackName =
@@ -401,7 +407,6 @@ window.UI = {
     if (this.elements.blackPlayerName)
       this.elements.blackPlayerName.textContent = blackName;
 
-    // Atualiza Avatares
     if (this.elements.whitePlayerAvatar) {
       if (users.whiteAvatar) {
         this.elements.whitePlayerAvatar.src = users.whiteAvatar;
