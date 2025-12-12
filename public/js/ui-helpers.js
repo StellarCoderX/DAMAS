@@ -229,13 +229,11 @@ window.UI = {
       }
 
       const creatorName = room.creatorEmail.split("@")[0];
-      const avatarHtml = room.creatorAvatar
-        ? `<img src="${room.creatorAvatar}" style="width:25px; height:25px; border-radius:50%; vertical-align:middle; margin-right:5px; object-fit:cover;">`
-        : "";
 
+      // REMOVIDO: Lógica de Avatar na lista de salas
       card.innerHTML = `
             <div class="room-card-info">
-                <p><strong>Criador:</strong> ${avatarHtml}${creatorName}</p>
+                <p><strong>Criador:</strong> ${creatorName}</p>
                 <p><strong>Aposta:</strong> R$ ${room.bet.toFixed(2)}</p>
                 <p><strong>Modo:</strong> ${gameModeText}</p>
                 <p><strong>Tempo:</strong> ${timeText}</p>
@@ -395,6 +393,7 @@ window.UI = {
     }
   },
 
+  // --- ATUALIZADO: Removemos Avatares do HUD para manter estilo clássico ---
   updatePlayerNames: function (users) {
     if (!users) return;
     const whiteName =
@@ -407,22 +406,12 @@ window.UI = {
     if (this.elements.blackPlayerName)
       this.elements.blackPlayerName.textContent = blackName;
 
+    // REMOVIDO: Lógica de atualização de avatar no jogo para limpar o layout
     if (this.elements.whitePlayerAvatar) {
-      if (users.whiteAvatar) {
-        this.elements.whitePlayerAvatar.src = users.whiteAvatar;
-        this.elements.whitePlayerAvatar.classList.remove("hidden");
-      } else {
-        this.elements.whitePlayerAvatar.classList.add("hidden");
-      }
+      this.elements.whitePlayerAvatar.classList.add("hidden");
     }
-
     if (this.elements.blackPlayerAvatar) {
-      if (users.blackAvatar) {
-        this.elements.blackPlayerAvatar.src = users.blackAvatar;
-        this.elements.blackPlayerAvatar.classList.remove("hidden");
-      } else {
-        this.elements.blackPlayerAvatar.classList.add("hidden");
-      }
+      this.elements.blackPlayerAvatar.classList.add("hidden");
     }
 
     if (this.elements.playersHud)
