@@ -91,8 +91,8 @@ app.post("/api/login", async (req, res) => {
       user: {
         email: user.email,
         saldo: user.saldo,
-        username: user.username, // NOVO
-        avatar: user.avatar, // NOVO
+        username: user.username,
+        avatar: user.avatar,
         referralEarnings: user.referralEarnings,
       },
     });
@@ -153,8 +153,8 @@ app.post("/api/user/re-authenticate", async (req, res) => {
       user: {
         email: user.email,
         saldo: user.saldo,
-        username: user.username, // NOVO
-        avatar: user.avatar, // NOVO
+        username: user.username,
+        avatar: user.avatar,
         referralEarnings: user.referralEarnings,
       },
     });
