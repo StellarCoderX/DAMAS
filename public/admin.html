@@ -4,198 +4,366 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Painel de Administrador</title>
+  <title>Painel Admin - Damas Arena</title>
 
-  <!-- CORREÇÃO: Caminhos apontando para a pasta css/ -->
-  <link rel="stylesheet" href="css/style.css?v=5" />
+  <!-- Fontes e Ícones -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Estilos do Jogo (para o tabuleiro de teste funcionar visualmente) -->
+  <link rel="stylesheet" href="css/style.css" />
   <link rel="stylesheet" href="css/game.css" />
-  <link rel="stylesheet" href="css/tournament.css" />
 
   <style>
-    body {
-      background-color: #2c3e50;
-      color: #ecf0f1;
-      font-family: "Poppins", sans-serif;
-      padding: 2rem;
+    :root {
+      --bg-dark: #0f172a;
+      --panel-bg: #1e293b;
+      --accent: #f1c40f;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --danger: #ef4444;
+      --success: #2ecc71;
+      --info: #3498db;
     }
 
-    #admin-container,
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: radial-gradient(circle at top, #1e293b, #0f172a);
+      color: var(--text-primary);
+      font-family: 'Montserrat', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+
+    /* --- LOGIN ADMIN --- */
     #auth-admin-container {
-      max-width: 1000px;
-      margin: auto;
-      background-color: #34495e;
-      padding: 2rem;
-      border-radius: 8px;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      background: rgba(30, 41, 59, 0.95);
+      padding: 3rem;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      text-align: center;
+      max-width: 400px;
+      width: 100%;
+      margin-top: 10vh;
     }
 
     h2 {
-      text-align: center;
+      color: var(--accent);
       margin-bottom: 1.5rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 800;
     }
 
-    input[type="text"],
-    input[type="password"],
-    input[type="number"] {
-      width: 100%;
-      padding: 10px;
+    h3 {
+      color: var(--text-secondary);
       margin-bottom: 1rem;
-      border-radius: 4px;
-      border: 1px solid #7f8c8d;
-      background-color: #2c3e50;
-      color: #ecf0f1;
+      font-size: 1.1rem;
+      border-left: 4px solid var(--accent);
+      padding-left: 10px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 1rem;
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: white;
+      border-radius: 8px;
+      outline: none;
+      transition: border 0.3s;
+    }
+
+    input:focus {
+      border-color: var(--accent);
     }
 
     button {
-      padding: 10px 15px;
-      border: none;
-      border-radius: 4px;
-      background-color: #e85d40;
-      color: white;
       cursor: pointer;
-      font-weight: bold;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 600;
+      transition: transform 0.1s, opacity 0.2s;
+    }
+
+    button:active {
+      transform: scale(0.98);
     }
 
     button:hover {
-      background-color: #d74c30;
+      opacity: 0.9;
+    }
+
+    .btn-login {
+      width: 100%;
+      padding: 12px;
+      background: var(--accent);
+      color: var(--bg-dark);
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 800;
+    }
+
+    /* --- PAINEL PRINCIPAL --- */
+    #admin-container {
+      width: 100%;
+      max-width: 1200px;
+      display: grid;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--panel-bg);
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid #334155;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Tabelas */
+    .table-container {
+      overflow-x: auto;
     }
 
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 1.5rem;
-      overflow-x: auto;
-      display: block;
+      margin-top: 10px;
+      font-size: 0.9rem;
     }
 
     th,
     td {
-      padding: 12px;
-      border-bottom: 1px solid #7f8c8d;
+      padding: 12px 15px;
       text-align: left;
-      white-space: nowrap;
+      border-bottom: 1px solid #334155;
     }
 
     th {
-      background-color: #46627f;
+      background-color: #0f172a;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      font-weight: 700;
     }
 
-    /* Estilos para o tabuleiro de teste (reutilizados de style.css) */
-    #board {
-      margin: 0 auto;
-      /* Centraliza o tabuleiro */
+    tr:hover {
+      background-color: rgba(255, 255, 255, 0.02);
     }
 
-    /* NOVOS ESTILOS PARA OS BOTÕES DE APROVAÇÃO */
-    .approve-btn {
-      background-color: #2ecc71;
+    /* Tags e Botões de Tabela */
+    .pix-key {
+      font-family: monospace;
+      background: #0f172a;
+      padding: 4px 8px;
+      border-radius: 4px;
+      color: var(--accent);
+      border: 1px solid #334155;
+    }
+
+    .amount-display {
+      color: var(--success);
+      font-weight: bold;
+    }
+
+    .btn-action {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      color: white;
       margin-right: 5px;
     }
 
-    .approve-btn:hover {
-      background-color: #27ae60;
+    .btn-approve {
+      background-color: var(--success);
     }
 
-    .reject-btn {
+    .btn-reject {
+      background-color: var(--danger);
+    }
+
+    .btn-edit {
+      background-color: var(--info);
+    }
+
+    .btn-delete {
       background-color: #e74c3c;
     }
 
-    .reject-btn:hover {
-      background-color: #c0392b;
+    .btn-refresh {
+      background: #334155;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      margin-bottom: 10px;
+    }
+
+    /* Tabuleiro de Teste */
+    #test-board-container {
+      background: #0f172a;
+      border: 2px solid #334155;
+    }
+
+    #board {
+      margin: 20px auto;
+    }
+
+    /* Centraliza o tabuleiro */
+
+    /* Utilitários */
+    .hidden {
+      display: none !important;
+    }
+
+    .flex-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    /* Layout Responsivo do Grid */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+
+    @media(min-width: 1024px) {
+      .dashboard-grid {
+        grid-template-columns: 2fr 1fr;
+      }
     }
   </style>
 </head>
 
 <body>
+
+  <!-- LOGIN -->
   <div id="auth-admin-container">
-    <h2>Acesso Restrito</h2>
+    <h2><i class="fa-solid fa-user-shield"></i> Damas Admin</h2>
     <form id="secret-form">
-      <input type="password" id="secret-key-input" placeholder="Digite a Senha Secreta de Admin" required />
-      <button type="submit">Entrar</button>
+      <div style="text-align: left; margin-bottom: 5px; color: var(--text-secondary); font-size: 0.9rem;">Senha de
+        Acesso</div>
+      <input type="password" id="secret-key-input" placeholder="••••••••" required />
+      <button type="submit" class="btn-login">ACESSAR PAINEL</button>
     </form>
-    <p id="auth-admin-message" style="text-align: center; margin-top: 1rem"></p>
+    <p id="auth-admin-message" style="margin-top: 15px; font-size: 0.9rem;"></p>
   </div>
 
+  <!-- PAINEL -->
   <div id="admin-container" class="hidden">
-    <!-- ### NOVA SEÇÃO DE RETIRADAS ### -->
-    <h2 style="color: #f39c12; border-bottom: 2px solid #f39c12; padding-bottom: 10px;">Solicitações de Retirada (PIX)
-    </h2>
-    <button id="refresh-withdrawals-btn" style="background-color: #3498db; margin-bottom: 10px;">Atualizar
-      Lista</button>
-    <table id="withdrawals-table" style="margin-bottom: 40px;">
-      <thead>
-        <tr>
-          <th>Data</th>
-          <th>Email</th>
-          <th>Chave PIX</th>
-          <!-- ALTERADO: Cabeçalho para refletir os valores -->
-          <th>Valores (Solicitado / Enviar)</th>
-          <th>Ações</th>
-        </tr>
-      </thead>
-      <tbody>
-        <!-- Preenchido via JS -->
-      </tbody>
-    </table>
 
-    <h2 style="border-bottom: 2px solid #ecf0f1; padding-bottom: 10px;">Gestão de Utilizadores</h2>
+    <header style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+      <h1 style="font-weight: 800; font-size: 1.5rem;">PAINEL DE CONTROLE</h1>
+      <button onclick="window.location.reload()"
+        style="background:transparent; border:1px solid #334155; color:white; padding:8px 15px; border-radius:6px;">Sair</button>
+    </header>
 
-    <button id="toggle-test-board-btn" style="background-color: #3498db; width: 100%; margin-bottom: 1rem">
-      Mostrar/Ocultar Tabuleiro de Teste
-    </button>
-    <div id="test-board-container" class="hidden" style="
-          margin-bottom: 2rem;
-          background-color: #2c3e50;
-          padding: 1rem;
-          border-radius: 8px;
-        ">
-      <h3 style="text-align: center">Tabuleiro de Teste de Regras</h3>
-      <p id="test-status" style="
-            text-align: center;
-            min-height: 20px;
-            margin-bottom: 10px;
-            font-weight: bold;
-          "></p>
+    <div class="dashboard-grid">
 
-      <div id="board" style="margin: 0 auto"></div>
+      <!-- COLUNA DA ESQUERDA (SAQUES E USUÁRIOS) -->
+      <div style="display: flex; flex-direction: column; gap: 20px;">
 
-      <div style="
-            text-align: center;
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 1rem;
-          ">
-        <button id="reset-board-btn" style="background-color: #f39c12">
-          Reiniciar Tabuleiro
-        </button>
-        <button id="undo-board-btn" style="background-color: #e67e22">
-          Voltar Jogada
-        </button>
-        <button id="switch-turn-btn" style="background-color: #2ecc71">
-          Vez: <span id="test-turn">Brancas</span>
-        </button>
+        <!-- CARD DE SAQUES -->
+        <div class="card">
+          <div class="flex-header">
+            <h3><i class="fa-solid fa-money-bill-transfer"></i> Solicitações de Saque</h3>
+            <button id="refresh-withdrawals-btn" class="btn-refresh"><i class="fa-solid fa-rotate"></i>
+              Atualizar</button>
+          </div>
+          <div class="table-container">
+            <table id="withdrawals-table">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Email</th>
+                  <th>Chave PIX</th>
+                  <th>Valores (Solicitado / Enviar)</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- JS Preenche aqui -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- CARD DE USUÁRIOS -->
+        <div class="card">
+          <div class="flex-header">
+            <h3><i class="fa-solid fa-users"></i> Gestão de Usuários</h3>
+            <input type="text" id="search-input" placeholder="Buscar email..."
+              style="width: 200px; margin:0; padding: 8px;">
+          </div>
+
+          <div class="table-container">
+            <table id="users-table">
+              <thead>
+                <tr>
+                  <th>Usuário / Indicação</th>
+                  <th>Saldo (R$)</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- JS Preenche aqui -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       </div>
+
+      <!-- COLUNA DA DIREITA (TESTES) -->
+      <div>
+        <div class="card">
+          <h3><i class="fa-solid fa-chess-board"></i> Ferramentas de Teste</h3>
+          <button id="toggle-test-board-btn" class="btn-login" style="background: #334155; margin-bottom: 15px;">
+            Abrir Tabuleiro de Teste
+          </button>
+
+          <div id="test-board-container" class="hidden" style="padding: 15px; border-radius: 8px; text-align: center;">
+            <p id="test-status" style="color: var(--accent); min-height: 25px; margin-bottom: 10px; font-weight: bold;">
+            </p>
+
+            <div id="board"></div>
+
+            <div style="display: flex; gap: 10px; justify-content: center; margin-top: 15px;">
+              <button id="reset-board-btn" class="btn-action"
+                style="background: var(--accent); color: black;">Reiniciar</button>
+              <button id="undo-board-btn" class="btn-action" style="background: #e67e22;">Voltar</button>
+              <button id="switch-turn-btn" class="btn-action" style="background: var(--success);">Vez: <span
+                  id="test-turn">Brancas</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
-    <input type="text" id="search-input" placeholder="Pesquisar por email..." />
-    <button id="reset-all-saldos-btn" style="background-color: #c0392b; width: 100%; margin-bottom: 1rem">
-      Zerar Saldo de Todos os Utilizadores
-    </button>
-    <table id="users-table">
-      <thead>
-        <tr>
-          <th>Email</th>
-          <th>Saldo</th>
-          <th>Ações</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
   </div>
 
-  <!-- CORREÇÃO: Caminhos apontando para a pasta js/ -->
+  <!-- Scripts -->
   <script src="js/gameLogic.js"></script>
-  <script src="js/admin.js?v=7"></script>
+  <script src="js/admin.js?v=8"></script>
 </body>
 
 </html>
