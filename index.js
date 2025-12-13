@@ -79,8 +79,11 @@ app.post("/api/register", async (req, res) => {
 app.post("/api/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password)
+    if (!email)
       return res.status(400).json({ message: "Email e senha obrigatórios." });
+    if (!password)
+      return res.status(400).json({ message: "Email e senha obrigatórios." });
+
     const emailLower = email.toLowerCase();
     const user = await User.findOne({ email: emailLower });
     if (!user) return res.status(400).json({ message: "Inválido." });
@@ -527,6 +530,28 @@ initializeManager(io, gameRooms);
 tournamentManager.initializeTournamentManager(io);
 setTournamentManager(tournamentManager);
 initializeSocket(io);
+
+// --- ROTINA DE LIMPEZA AUTOMÁTICA DE HISTÓRICO ---
+// Executa a cada 1 hora para limpar partidas com mais de 24 horas
+const CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 Hora em milissegundos
+const HISTORY_RETENTION = 24 * 60 * 60 * 1000; // 24 Horas em milissegundos
+
+setInterval(async () => {
+  try {
+    const cutoffDate = new Date(Date.now() - HISTORY_RETENTION);
+    
+    // Deleta partidas cujo 'createdAt' seja anterior à data limite (24h atrás)
+    const result = await MatchHistory.deleteMany({ 
+      createdAt: { $lt: cutoffDate } 
+    });
+
+    if (result.deletedCount > 0) {
+      console.log(`[Limpeza Automática] Removidos ${result.deletedCount} registros de histórico com mais de 24 horas.`);
+    }
+  } catch (error) {
+    console.error("[Limpeza Automática] Erro ao limpar histórico:", error);
+  }
+}, CLEANUP_INTERVAL);
 
 const HOST = process.env.HOST || "0.0.0.0";
 server.listen(PORT, HOST, () => {
