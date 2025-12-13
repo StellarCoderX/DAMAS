@@ -1,4 +1,4 @@
-// public/script.js - Gerencia Lógica do Jogo e Inicialização
+// public/script.js - Gerencia Lógica do Jogo com Fila de Animação
 document.addEventListener("DOMContentLoaded", () => {
   UI.init();
 
@@ -20,6 +20,29 @@ document.addEventListener("DOMContentLoaded", () => {
   let drawCooldownInterval = null;
   let lastPacketTime = Date.now();
   let watchdogInterval = null;
+
+  // --- FILA DE ATUALIZAÇÕES (CORREÇÃO DE SYNC) ---
+  // Impede que múltiplas capturas seguidas cheguem juntas e quebrem a animação
+  let updateQueue = [];
+  let isProcessingQueue = false;
+
+  async function processUpdateQueue() {
+    if (isProcessingQueue) return;
+    isProcessingQueue = true;
+
+    while (updateQueue.length > 0) {
+      const updateData = updateQueue.shift(); // Pega o primeiro da fila
+      try {
+        // Aguarda toda a animação e renderização terminar antes de ir para o próximo
+        await processGameUpdate(updateData);
+        UI.highlightMandatoryPieces(updateData.mandatoryPieces);
+      } catch (e) {
+        console.error("Erro ao processar atualização da fila:", e);
+      }
+    }
+
+    isProcessingQueue = false;
+  }
 
   // INICIALIZA O MÓDULO DE LOBBY
   if (window.initLobby) {
@@ -103,6 +126,9 @@ document.addEventListener("DOMContentLoaded", () => {
   function handleBoardClick(e) {
     if (window.isSpectator) return;
     if (!myColor) return;
+
+    // Se estiver processando animações de movimento do oponente, bloqueia clique
+    if (isProcessingQueue) return;
 
     const square = e.target.closest(".square");
     if (!square) return;
@@ -198,6 +224,10 @@ document.addEventListener("DOMContentLoaded", () => {
     currentRoom = null;
     myColor = null;
     currentBoardSize = 8;
+    // Limpa fila ao sair
+    updateQueue = [];
+    isProcessingQueue = false;
+
     localStorage.removeItem("checkersCurrentRoom");
 
     UI.returnToLobbyScreen();
@@ -210,6 +240,7 @@ document.addEventListener("DOMContentLoaded", () => {
     lastPacketTime = Date.now();
 
     if (gameState.lastMove && !suppressSound) {
+      // Aqui a mágica acontece: o 'await' segura a execução até a animação terminar
       await UI.animatePieceMove(
         gameState.lastMove.from,
         gameState.lastMove.to,
@@ -259,22 +290,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- LISTENERS DE SOCKET DO JOGO ---
 
-  // ### CORREÇÃO: Listener para movimentos inválidos ###
   socket.on("invalidMove", (data) => {
-    // Vibra o celular para dar feedback tátil de erro
     if (navigator.vibrate) {
       try {
         navigator.vibrate([100, 50, 100]);
       } catch (e) {}
     }
 
-    // Exibe o motivo do erro na área de status do jogo
     const gs = UI.elements.gameStatus;
     const originalText = gs.innerHTML;
-    
+
     gs.innerHTML = `<span style="color: #e74c3c; font-weight: bold; background: rgba(0,0,0,0.7); padding: 2px 5px; border-radius: 4px;">❌ ${data.message}</span>`;
-    
-    // Restaura o texto original após 4 segundos
+
     setTimeout(() => {
       if (gs.innerHTML.includes("❌")) {
         gs.innerHTML = originalText;
@@ -328,6 +355,10 @@ document.addEventListener("DOMContentLoaded", () => {
       isGameOver = false;
       stopWatchdog();
 
+      // Limpa fila de jogos anteriores
+      updateQueue = [];
+      isProcessingQueue = false;
+
       UI.showGameScreen(false);
       currentBoardSize = gameState.boardSize;
       UI.createBoard(currentBoardSize, handleBoardClick);
@@ -351,7 +382,6 @@ document.addEventListener("DOMContentLoaded", () => {
       UI.highlightMandatoryPieces(gameState.mandatoryPieces);
       UI.updatePlayerNames(gameState.users);
 
-      // Toca som de entrada
       if (!window.isSpectator) UI.playAudio("join");
     } catch (e) {
       console.error(e);
@@ -372,9 +402,10 @@ document.addEventListener("DOMContentLoaded", () => {
       UI.elements.timerDisplay.textContent = "Pausado";
   });
 
-  socket.on("gameStateUpdate", async (gs) => {
-    await processGameUpdate(gs);
-    UI.highlightMandatoryPieces(gs.mandatoryPieces);
+  // Listener modificado para usar a FILA
+  socket.on("gameStateUpdate", (gs) => {
+    updateQueue.push(gs);
+    processUpdateQueue();
   });
 
   socket.on("showValidMoves", (moves) => {
@@ -386,6 +417,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (window.isSpectator) return;
 
     document.getElementById("connection-lost-overlay").classList.add("hidden");
+
+    // Limpa fila ao reconectar para evitar animações velhas
+    updateQueue = [];
+    isProcessingQueue = false;
+
     currentBoardSize = data.gameState.boardSize;
     UI.createBoard(currentBoardSize, handleBoardClick);
 
@@ -402,6 +438,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (isGameOver) return;
     isGameOver = true;
     stopWatchdog();
+
+    // Limpa fila
+    updateQueue = [];
+    isProcessingQueue = false;
 
     document.getElementById("connection-lost-overlay").classList.add("hidden");
     UI.resetEndGameUI();
@@ -438,6 +478,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (isGameOver) return;
     isGameOver = true;
     stopWatchdog();
+
+    updateQueue = [];
+    isProcessingQueue = false;
+
     document.getElementById("connection-lost-overlay").classList.add("hidden");
     UI.resetEndGameUI();
     document.getElementById("game-over-overlay").classList.remove("hidden");

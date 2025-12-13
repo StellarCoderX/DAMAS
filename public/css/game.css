@@ -49,6 +49,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  position: relative; /* Necessário para posicionamento relativo do clique */
   /* REMOVIDO contain: strict para evitar cortar a peça durante o movimento */
 }
 
@@ -59,6 +60,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  position: relative; /* Necessário para posicionamento relativo do clique */
   /* REMOVIDO contain: strict para evitar cortar a peça durante o movimento */
 }
 
@@ -82,6 +84,29 @@
   transform: translateZ(0);
   will-change: transform; /* Avisa o navegador que isso vai mexer */
   contain: layout style; /* Removido 'paint' para não cortar a sombra da peça */
+}
+
+/* CORREÇÃO DE HITBOX (Área de Toque): 
+   Cria uma área invisível que preenche TODO o quadrado (118% da peça = 100% do quadrado).
+   Isso garante que cliques nos cantos do quadrado selecionem a peça.
+*/
+.piece::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 118%; /* Compensa o tamanho de 85% da peça para encher o quadrado */
+  height: 118%;
+  z-index: 1; /* Fica sobre a peça visualmente mas abaixo do texto da dama */
+  background-color: transparent;
+  border-radius: 10%; /* Quase quadrado para pegar os cantos */
+}
+
+/* Feedback visual imediato ao tocar (Active State) */
+.piece:active {
+  transform: scale(0.95); /* Leve encolhimento para sentir o "click" */
+  transition: transform 0.05s;
 }
 
 .piece:hover {
@@ -111,6 +136,8 @@
   font-weight: bold;
   color: gold;
   text-shadow: 1px 1px 0 #000;
+  position: relative;
+  z-index: 5; /* Texto da dama acima da hitbox invisível */
 }
 
 .black-piece.king::after {

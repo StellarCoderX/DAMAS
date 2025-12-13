@@ -1,4 +1,4 @@
-// ui-helpers.js (OTIMIZADO EXTREMO PARA FLUIDEZ MOBILE)
+// ui-helpers.js (OTIMIZADO EXTREMO PARA FLUIDEZ MOBILE + VIBRAÇÃO SEGURA)
 
 window.UI = {
   elements: {},
@@ -45,6 +45,25 @@ window.UI = {
       captureSound: document.getElementById("capture-sound"),
       joinSound: document.getElementById("join-sound"),
     };
+  },
+
+  // --- FEEDBACK TÁTIL (VIBRAÇÃO) OTIMIZADO ---
+
+  triggerHaptic: function () {
+    // Verifica se o navegador suporta vibração
+    if ("vibrate" in navigator) {
+      // OTIMIZAÇÃO: setTimeout(..., 0) joga a vibração para o final da fila de eventos.
+      // Isso garante que o navegador termine de calcular a animação visual (CSS/Reflow)
+      // ANTES de tentar vibrar o celular, evitando travamentos na peça.
+      setTimeout(() => {
+        try {
+          // Vibração curta (15ms) é suficiente para sentir o "click" e gasta menos bateria/CPU
+          navigator.vibrate(15);
+        } catch (e) {
+          // Silencia erros se o hardware estiver ocupado
+        }
+      }, 0);
+    }
   },
 
   // --- ANIMAÇÃO DE MOVIMENTO SINCRONIZADA (RequestAnimationFrame) ---
@@ -414,6 +433,9 @@ window.UI = {
       sound.currentTime = 0;
       // .catch() vazio para evitar erros no console se o usuário não interagiu ainda
       sound.play().catch(() => {});
+
+      // DISPARA VIBRAÇÃO SEGURA (Sincronizada com o som)
+      this.triggerHaptic();
     }
   },
 
