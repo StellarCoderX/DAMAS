@@ -346,7 +346,9 @@ document.addEventListener("DOMContentLoaded", () => {
     ) {
       window.isSpectator = false;
     }
-    if (window.isSpectator) return;
+
+    // CORREÇÃO: Removida a linha 'if (window.isSpectator) return;'
+    // Agora o espectador também recebe a atualização de tela limpa para o novo jogo.
 
     try {
       if (!gameState || !gameState.boardState)
@@ -359,34 +361,47 @@ document.addEventListener("DOMContentLoaded", () => {
       updateQueue = [];
       isProcessingQueue = false;
 
-      UI.showGameScreen(false);
+      // Passa 'true' se for espectador para esconder botões de desistir/empatar
+      UI.showGameScreen(window.isSpectator);
+
       currentBoardSize = gameState.boardSize;
       UI.createBoard(currentBoardSize, handleBoardClick);
 
       currentRoom = gameState.roomCode;
-      localStorage.setItem("checkersCurrentRoom", currentRoom);
 
-      myColor = socket.id === gameState.players.white ? "b" : "p";
+      if (!window.isSpectator) {
+        // Lógica exclusiva para JOGADORES
+        localStorage.setItem("checkersCurrentRoom", currentRoom);
+        myColor = socket.id === gameState.players.white ? "b" : "p";
 
-      let statusText = `Você joga com as ${
-        myColor === "b" ? "Brancas" : "Pretas"
-      }.`;
-      if (gameState.openingName)
-        statusText += `<br><small>Sorteio: ${gameState.openingName}</small>`;
-      UI.elements.gameStatus.innerHTML = statusText;
+        let statusText = `Você joga com as ${
+          myColor === "b" ? "Brancas" : "Pretas"
+        }.`;
+        if (gameState.openingName)
+          statusText += `<br><small>Sorteio: ${gameState.openingName}</small>`;
+        UI.elements.gameStatus.innerHTML = statusText;
 
-      UI.elements.board.classList.remove("board-flipped");
-      if (myColor === "p") UI.elements.board.classList.add("board-flipped");
+        UI.elements.board.classList.remove("board-flipped");
+        if (myColor === "p") UI.elements.board.classList.add("board-flipped");
+      } else {
+        // Lógica exclusiva para ESPECTADORES
+        myColor = null;
+        UI.elements.gameStatus.innerHTML = "Espectador: Nova partida iniciada";
+        UI.elements.board.classList.remove("board-flipped"); // Reseta visualização
+      }
 
       processGameUpdate(gameState, true);
       UI.highlightMandatoryPieces(gameState.mandatoryPieces);
       UI.updatePlayerNames(gameState.users);
 
-      if (!window.isSpectator) UI.playAudio("join");
+      // Toca som de início para todos (incluindo espectador, para alertar da nova partida)
+      UI.playAudio("join");
     } catch (e) {
       console.error(e);
-      alert("Erro ao iniciar.");
-      returnToLobbyLogic();
+      if (!window.isSpectator) {
+        alert("Erro ao iniciar.");
+        returnToLobbyLogic();
+      }
     }
   });
 
