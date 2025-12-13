@@ -1,8 +1,8 @@
-// ui-helpers.js (OTIMIZADO PARA PERFORMANCE EM CELULARES)
+// ui-helpers.js (OTIMIZADO PARA PERFORMANCE MOBILE)
 
 window.UI = {
   elements: {},
-  squaresCache: [], // Cache para armazenar referências das casas (Performance boost)
+  boardCache: [], // Cache para armazenar referências diretas aos quadrados (DOM)
 
   init: function () {
     this.elements = {
@@ -47,12 +47,12 @@ window.UI = {
     };
   },
 
-  // --- ANIMAÇÃO DE MOVIMENTO (OTIMIZADA COM CACHE) ---
+  // --- ANIMAÇÃO DE MOVIMENTO OTIMIZADA ---
 
   animatePieceMove: function (from, to, boardSize) {
     return new Promise((resolve) => {
-      // Usa o cache em vez de querySelector (MUITO mais rápido)
-      const square = this.getSquare(from.row, from.col);
+      // Usa o cache em vez de querySelector (muito mais rápido)
+      const square = this.boardCache[from.row] && this.boardCache[from.row][from.col];
       if (!square) {
         resolve();
         return;
@@ -65,8 +65,8 @@ window.UI = {
       }
 
       const fromRect = square.getBoundingClientRect();
-
-      const toSquare = this.getSquare(to.row, to.col);
+      
+      const toSquare = this.boardCache[to.row] && this.boardCache[to.row][to.col];
       if (!toSquare) {
         resolve();
         return;
@@ -78,86 +78,71 @@ window.UI = {
 
       const isFlipped = this.elements.board.classList.contains("board-flipped");
 
-      // Usando requestAnimationFrame para garantir suavidade
-      requestAnimationFrame(() => {
-        piece.style.transition =
-          "transform 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)"; // Curva mais suave
-        piece.style.zIndex = 100;
+      // Otimização de GPU
+      piece.style.willChange = "transform"; 
+      piece.style.transition = "transform 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)";
+      piece.style.zIndex = 100;
 
-        // Otimização de Hardware
-        piece.style.willChange = "transform";
+      if (isFlipped) {
+        piece.style.transform = `rotate(180deg) translate(${deltaX}px, ${deltaY}px)`;
+      } else {
+        piece.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+      }
 
-        if (isFlipped) {
-          piece.style.transform = `rotate(180deg) translate(${deltaX}px, ${deltaY}px)`;
-        } else {
-          piece.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-        }
-
-        // Limpeza após a animação
-        setTimeout(() => {
-          piece.style.willChange = "auto";
-          resolve();
-        }, 200);
-      });
+      setTimeout(() => {
+        piece.style.willChange = "auto"; // Libera memória da GPU
+        resolve();
+      }, 200);
     });
   },
 
-  // --- RENDERIZAÇÃO INTELIGENTE (OTIMIZADA COM CACHE) ---
-
-  // Helper para pegar quadrado do cache
-  getSquare: function (row, col) {
-    if (this.squaresCache[row] && this.squaresCache[row][col]) {
-      return this.squaresCache[row][col];
-    }
-    // Fallback caso o cache falhe (segurança)
-    return document.querySelector(
-      `.square[data-row='${row}'][data-col='${col}']`
-    );
-  },
+  // --- RENDERIZAÇÃO INTELIGENTE COM CACHE ---
 
   renderPieces: function (boardState, boardSize) {
-    // Fragmento de documento não é necessário aqui pois já temos as referências,
-    // mas evitamos leituras de layout desnecessárias.
-
     for (let row = 0; row < boardSize; row++) {
       for (let col = 0; col < boardSize; col++) {
-        // Acesso direto ao elemento via memória (O(1)) em vez de busca no DOM (O(N))
-        const square = this.getSquare(row, col);
+        // ACESSO DIRETO VIA CACHE (O(1)) - Elimina gargalo de performance
+        const square = this.boardCache[row] && this.boardCache[row][col];
         if (!square) continue;
 
         const pieceType = boardState[row][col];
-        // Otimização: verificamos firstChild em vez de querySelector
-        const existingPiece = square.firstElementChild;
+        // Verifica apenas o primeiro filho para evitar querySelector desnecessário
+        const existingPiece = square.firstElementChild && square.firstElementChild.classList.contains('piece') 
+          ? square.firstElementChild 
+          : null;
 
         if (pieceType !== 0) {
           const isBlack = pieceType.toString().toLowerCase() === "p";
           const isKing = pieceType === "P" || pieceType === "B";
           const classColor = isBlack ? "black-piece" : "white-piece";
 
+          // Diffing simples: só recria se mudar algo crítico ou não existir
           if (existingPiece) {
-            // Só altera classes se necessário para evitar reflow
-            if (!existingPiece.classList.contains(classColor)) {
+            // Se já existe, apenas atualiza classes se necessário (mais leve que recriar DOM)
+            const currentClass = isBlack ? "black-piece" : "white-piece";
+            if (!existingPiece.classList.contains(currentClass)) {
               existingPiece.className = `piece ${classColor}`;
             }
-            // Verifica se estado de dama mudou
-            const hasKingClass = existingPiece.classList.contains("king");
-            if (isKing && !hasKingClass) {
-              existingPiece.classList.add("king");
-            } else if (!isKing && hasKingClass) {
-              existingPiece.classList.remove("king");
+            
+            if (isKing) {
+               if (!existingPiece.classList.contains("king")) existingPiece.classList.add("king");
+            } else {
+               if (existingPiece.classList.contains("king")) existingPiece.classList.remove("king");
             }
 
-            // Reseta estilos inline da animação
+            // Reseta estilos inline de animação anterior
             existingPiece.style.transform = "";
             existingPiece.style.transition = "";
             existingPiece.style.zIndex = "";
           } else {
+            // Cria nova peça
             const piece = document.createElement("div");
             piece.className = `piece ${classColor}`;
             if (isKing) piece.classList.add("king");
             square.appendChild(piece);
           }
         } else {
+          // Remove peça se não deve ter nada
           if (existingPiece) {
             existingPiece.remove();
           }
@@ -169,56 +154,38 @@ window.UI = {
   createBoard: function (boardSize, clickHandler) {
     const board = this.elements.board;
     board.innerHTML = "";
-
-    // REINICIA O CACHE
-    this.squaresCache = [];
+    
+    // Reinicia o cache
+    this.boardCache = [];
 
     let squareSizeCSS;
-
-    // DETECÇÃO DE DISPOSITIVO (MOBILE VS DESKTOP)
     const isMobile = window.innerWidth <= 768;
 
     if (boardSize === 10) {
-      if (isMobile) {
-        squareSizeCSS = "min(36px, 9vw)";
-      } else {
-        squareSizeCSS = "min(65px, 7.5vmin)";
-      }
+      squareSizeCSS = isMobile ? "min(36px, 9vw)" : "min(65px, 7.5vmin)";
     } else {
-      if (isMobile) {
-        squareSizeCSS = "min(45px, 11vw)";
-      } else {
-        squareSizeCSS = "min(80px, 10vmin)";
-      }
+      squareSizeCSS = isMobile ? "min(45px, 11vw)" : "min(80px, 10vmin)";
     }
 
     board.style.gridTemplateColumns = `repeat(${boardSize}, ${squareSizeCSS})`;
     board.style.gridTemplateRows = `repeat(${boardSize}, ${squareSizeCSS})`;
 
-    // Usando DocumentFragment para inserir tudo de uma vez no DOM (menos reflow)
-    const fragment = document.createDocumentFragment();
-
     for (let row = 0; row < boardSize; row++) {
-      this.squaresCache[row] = []; // Inicializa linha do cache
+      this.boardCache[row] = []; // Inicializa linha do cache
       for (let col = 0; col < boardSize; col++) {
         const square = document.createElement("div");
         square.classList.add(
           "square",
           (row + col) % 2 === 1 ? "dark" : "light"
         );
-        // Dataset ainda é útil para o click handler
         square.dataset.row = row;
         square.dataset.col = col;
-
+        board.appendChild(square);
+        
         // SALVA NO CACHE
-        this.squaresCache[row][col] = square;
-
-        fragment.appendChild(square);
+        this.boardCache[row][col] = square;
       }
     }
-
-    board.appendChild(fragment); // Inserção única
-
     board.removeEventListener("click", clickHandler);
     board.addEventListener("click", clickHandler);
   },
@@ -363,11 +330,12 @@ window.UI = {
     document
       .querySelectorAll(".last-move")
       .forEach((el) => el.classList.remove("last-move"));
+    
     if (lastMove) {
-      // Usa o cache se disponível
-      const fromSq = this.getSquare(lastMove.from.row, lastMove.from.col);
-      const toSq = this.getSquare(lastMove.to.row, lastMove.to.col);
-
+      // Otimização: Tenta usar o cache se possível, senão fallback
+      const fromSq = this.boardCache[lastMove.from.row]?.[lastMove.from.col];
+      const toSq = this.boardCache[lastMove.to.row]?.[lastMove.to.col];
+      
       if (fromSq) fromSq.classList.add("last-move");
       if (toSq) toSq.classList.add("last-move");
     }
@@ -377,10 +345,10 @@ window.UI = {
     document
       .querySelectorAll(".mandatory-capture")
       .forEach((p) => p.classList.remove("mandatory-capture"));
+      
     if (piecesToHighlight && piecesToHighlight.length > 0) {
       piecesToHighlight.forEach((pos) => {
-        const square = this.getSquare(pos.row, pos.col);
-        // Verifica firstElementChild para performance
+        const square = this.boardCache[pos.row]?.[pos.col];
         if (square && square.firstElementChild) {
           square.firstElementChild.classList.add("mandatory-capture");
         }
@@ -390,7 +358,7 @@ window.UI = {
 
   highlightValidMoves: function (moves) {
     moves.forEach((move) => {
-      const square = this.getSquare(move.row, move.col);
+      const square = this.boardCache[move.row]?.[move.col];
       if (square) {
         square.classList.add("valid-move-highlight");
       }
@@ -422,7 +390,7 @@ window.UI = {
 
     if (sound) {
       sound.currentTime = 0;
-      sound.play().catch((e) => {}); // Silencia erros de autoplay
+      sound.play().catch((e) => console.log("Áudio bloqueado:", e));
     }
   },
 
@@ -510,9 +478,6 @@ window.UI = {
     this.elements.board.classList.remove("board-flipped");
     this.elements.board.innerHTML = "";
     this.elements.playersHud.classList.add("hidden");
-
-    // Limpa o cache ao sair
-    this.squaresCache = [];
 
     this.resetLobbyUI();
   },
