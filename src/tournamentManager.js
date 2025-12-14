@@ -6,7 +6,7 @@ const { gameRooms } = require("./socketHandlers");
 const MIN_PLAYERS = 2;
 const ENTRY_FEE = 2.0;
 const TOURNAMENT_HOUR = 0; // ALTERADO PARA 00:37
-const TOURNAMENT_MINUTE = 39;
+const TOURNAMENT_MINUTE = 54;
 
 let io; // Referência ao Socket.IO
 let checkInterval;
