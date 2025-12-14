@@ -1,4 +1,4 @@
-// public/script.js - Gerencia Lógica do Jogo com Fila de Animação
+// public/script.js - Gerencia Lógica do Jogo com OTIMIZAÇÃO OTIMISTA (Zero Lag)
 document.addEventListener("DOMContentLoaded", () => {
   UI.init();
 
@@ -23,6 +23,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ### NOVO: Estado local das peças capturadas na animação atual ###
   let currentTurnCapturedPieces = [];
+
+  // --- VARIÁVEIS PARA OTIMIZAÇÃO (Lag Zero) ---
+  let lastOptimisticMove = null; // Armazena o último movimento feito localmente
+  let pendingBoardSnapshot = null; // Backup do tabuleiro para caso de erro (rollback)
 
   // --- VARIÁVEIS PARA REPLAY ---
   let savedReplayData = null;
@@ -178,6 +182,34 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // --- NOVA FUNÇÃO: Executa movimento localmente antes do servidor ---
+  async function performOptimisticMove(from, to) {
+    // 1. Salva backup caso precise desfazer
+    pendingBoardSnapshot = JSON.parse(JSON.stringify(boardState));
+
+    // 2. Salva qual foi o movimento otimista para não animar de novo quando o server confirmar
+    lastOptimisticMove = {
+      from: { row: from.row, col: from.col },
+      to: { row: to.row, col: to.col },
+    };
+
+    // 3. Atualiza estado local (simplificado: apenas move a peça)
+    // A lógica complexa de captura e remoção deixa pro servidor corrigir em ms,
+    // mas visualmente a peça já vai pro lugar.
+    const movingPiece = boardState[from.row][from.col];
+    boardState[to.row][to.col] = movingPiece;
+    boardState[from.row][from.col] = 0;
+
+    // 4. Animação imediata
+    UI.playAudio("move"); // Som instantâneo
+    await UI.animatePieceMove(from, to, currentBoardSize);
+
+    // 5. Renderiza tabuleiro no novo estado
+    UI.renderPieces(boardState, currentBoardSize);
+    UI.clearHighlights();
+    selectedPiece = null;
+  }
+
   function handleBoardClick(e) {
     if (window.isSpectator || isReplaying) return;
     if (!myColor) return;
@@ -192,13 +224,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (selectedPiece) {
       if (square.classList.contains("valid-move-highlight")) {
+        const moveFrom = { row: selectedPiece.row, col: selectedPiece.col };
+        const moveTo = { row, col };
+
+        // OTIMIZAÇÃO: Executa visualmente antes de enviar
+        performOptimisticMove(moveFrom, moveTo);
+
         socket.emit("playerMove", {
-          from: { row: selectedPiece.row, col: selectedPiece.col },
-          to: { row, col },
+          from: moveFrom,
+          to: moveTo,
           room: currentRoom,
         });
-        UI.clearHighlights();
-        selectedPiece = null;
         return;
       }
       if (selectedPiece.row === row && selectedPiece.col === col) {
@@ -246,7 +282,6 @@ document.addEventListener("DOMContentLoaded", () => {
         boardSize: currentBoardSize,
         currentPlayer: myColor,
         mustCaptureWith: null,
-        // Passa as peças capturadas atuais para o validador local
         turnCapturedPieces: currentTurnCapturedPieces || [],
       };
 
@@ -256,13 +291,14 @@ document.addEventListener("DOMContentLoaded", () => {
         tempGame
       );
       if (uniqueMove) {
+        // OTIMIZAÇÃO: Auto-captura instantânea
+        performOptimisticMove({ row, col }, uniqueMove.to);
+
         socket.emit("playerMove", {
           from: { row, col },
           to: uniqueMove.to,
           room: currentRoom,
         });
-        UI.clearHighlights();
-        selectedPiece = null;
         return;
       }
     }
@@ -284,6 +320,8 @@ document.addEventListener("DOMContentLoaded", () => {
     updateQueue = [];
     currentTurnCapturedPieces = [];
     isProcessingQueue = false;
+    lastOptimisticMove = null; // Reset
+    pendingBoardSnapshot = null; // Reset
 
     localStorage.removeItem("checkersCurrentRoom");
 
@@ -296,10 +334,31 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!gameState || !gameState.boardState) return;
     lastPacketTime = Date.now();
 
-    // Atualiza estado local das peças capturadas
     currentTurnCapturedPieces = gameState.turnCapturedPieces || [];
 
-    if (gameState.lastMove && !suppressSound) {
+    // --- LÓGICA ANTI-LAG ---
+    let skipAnimation = false;
+    let isMyMove = false;
+
+    if (gameState.lastMove) {
+      // Verifica se foi o MEU movimento que acabou de ser processado
+      // (Isso assume que o servidor envia 'currentPlayer' já trocado, então quem moveu foi o anterior)
+      // Mas podemos checar pelas coordenadas se bate com o lastOptimisticMove
+      if (
+        lastOptimisticMove &&
+        gameState.lastMove.from.row === lastOptimisticMove.from.row &&
+        gameState.lastMove.from.col === lastOptimisticMove.from.col &&
+        gameState.lastMove.to.row === lastOptimisticMove.to.row &&
+        gameState.lastMove.to.col === lastOptimisticMove.to.col
+      ) {
+        skipAnimation = true; // Já animamos localmente!
+        isMyMove = true;
+        lastOptimisticMove = null; // Limpa para não bloquear próximos
+        pendingBoardSnapshot = null; // Sucesso, descarta backup
+      }
+    }
+
+    if (gameState.lastMove && !suppressSound && !skipAnimation) {
       await UI.animatePieceMove(
         gameState.lastMove.from,
         gameState.lastMove.to,
@@ -307,26 +366,8 @@ document.addEventListener("DOMContentLoaded", () => {
       );
     }
 
-    let oldPieceCount = 0;
-    boardState.forEach((r) =>
-      r.forEach((p) => {
-        if (p !== 0) oldPieceCount++;
-      })
-    );
-
-    let newPieceCount = 0;
-    gameState.boardState.forEach((r) =>
-      r.forEach((p) => {
-        if (p !== 0) newPieceCount++;
-      })
-    );
-
-    // Ajuste de som: se capturou, toca som, mas peça ainda está lá visualmente (pois backend não removeu).
-    // O backend envia o campo 'mandatoryPieces' se houver continuações.
-    // Se houve captura na lógica, mas a peça está no board, devemos tocar o som de captura se o movimento foi de captura.
-    // Como detectar se foi captura? Podemos ver se o tamanho do salto foi > 1 (simplificação)
-
-    if (!suppressSound) {
+    // Tocar som se for movimento do OPONENTE ou se for meu mas eu não tinha previsto (ex: sync forçado)
+    if (!suppressSound && !isMyMove) {
       if (gameState.lastMove) {
         const dist = Math.abs(
           gameState.lastMove.from.row - gameState.lastMove.to.row
@@ -336,11 +377,10 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
+    // Atualiza o tabuleiro com a "Verdade" do servidor
     boardState = gameState.boardState;
     UI.renderPieces(boardState, gameState.boardSize);
 
-    // VISUAL: Podemos adicionar classe 'ghost' ou 'captured-temp' nas peças que estão em turnCapturedPieces
-    // para dar feedback visual que elas "já eram", mas estão lá bloqueando.
     if (currentTurnCapturedPieces.length > 0) {
       currentTurnCapturedPieces.forEach((pos) => {
         const cell = document.querySelector(
@@ -348,7 +388,7 @@ document.addEventListener("DOMContentLoaded", () => {
         );
         if (cell) {
           const piece = cell.querySelector(".piece");
-          if (piece) piece.style.opacity = "0.5"; // Visual de peça "fantasma"
+          if (piece) piece.style.opacity = "0.5";
         }
       });
     }
@@ -372,6 +412,15 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   socket.on("invalidMove", (data) => {
+    // --- ROLLBACK: Se o servidor rejeitou, desfaz o movimento local ---
+    if (pendingBoardSnapshot) {
+      console.warn("Movimento inválido detectado. Revertendo tabuleiro...");
+      boardState = pendingBoardSnapshot;
+      UI.renderPieces(boardState, currentBoardSize);
+      pendingBoardSnapshot = null;
+      lastOptimisticMove = null;
+    }
+
     if (navigator.vibrate) {
       try {
         navigator.vibrate([100, 50, 100]);
@@ -429,6 +478,7 @@ document.addEventListener("DOMContentLoaded", () => {
       updateQueue = [];
       isProcessingQueue = false;
       currentTurnCapturedPieces = [];
+      lastOptimisticMove = null;
 
       document.getElementById("game-over-overlay").classList.add("hidden");
       document.getElementById("next-game-overlay").classList.add("hidden");
