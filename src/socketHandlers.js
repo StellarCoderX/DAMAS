@@ -7,7 +7,7 @@ const {
   standardOpening10x10,
 } = require("../utils/constants");
 
-// ### ATUALIZADO: Caminho ajustado para a nova pasta 'js' ###
+// Importa a lógica de jogo compartilhada
 const {
   isMoveValid,
   checkWinCondition,
@@ -32,8 +32,8 @@ function getLobbyInfo() {
         bet: room.bet,
         gameMode: room.gameMode,
         timeControl: room.timeControl,
-        creatorEmail: p1.username || p1.email, // Usa username se existir
-        creatorAvatar: p1.avatar, // Passa o avatar
+        creatorEmail: p1.username || p1.email,
+        creatorAvatar: p1.avatar,
         timerDuration: room.timerDuration,
       };
     });
@@ -48,8 +48,8 @@ function getLobbyInfo() {
         bet: room.bet,
         gameMode: room.gameMode,
         timeControl: room.timeControl,
-        player1Email: p1.username || p1.email, // Username
-        player2Email: p2.username || p2.email, // Username
+        player1Email: p1.username || p1.email,
+        player2Email: p2.username || p2.email,
         timerDuration: room.timerDuration,
       };
     });
@@ -57,12 +57,11 @@ function getLobbyInfo() {
   return { waiting: waitingRooms, active: activeRooms };
 }
 
-// --- LÓGICA DE JOGO MOVIDA PARA ESCOPO GLOBAL DO MÓDULO ---
-
 function cleanupPreviousRooms(userEmail) {
   const roomsToRemove = [];
   Object.keys(gameRooms).forEach((code) => {
     const r = gameRooms[code];
+    // Remove se tiver apenas 1 jogador (criador) e for o mesmo email
     if (
       r.players.length === 1 &&
       !r.isGameConcluded &&
@@ -98,8 +97,6 @@ async function startGameLogic(room) {
     console.log("[Novo Jogo/Revanche] Invertendo cores.");
     const previousWhiteSocketId = room.game.players.white;
 
-    // Lógica para manter os jogadores corretos mesmo se reconectarem com novo socketId,
-    // mas priorizando a inversão baseada no jogo anterior
     if (player1.socketId === previousWhiteSocketId) {
       whitePlayer = player2;
       blackPlayer = player1;
@@ -153,7 +150,6 @@ async function startGameLogic(room) {
       room.match.openingBoard = JSON.parse(
         JSON.stringify(selectedOpening.board)
       );
-      // Salva referência persistente dos jogadores
       room.match.player1 = {
         email: player1.user.email,
         socketId: player1.socketId,
@@ -173,7 +169,6 @@ async function startGameLogic(room) {
     users: {
       white: whitePlayer.user.email,
       black: blackPlayer.user.email,
-      // NOVOS CAMPOS PARA DISPLAY NO CLIENTE
       whiteName: whitePlayer.user.username || whitePlayer.user.email,
       blackName: blackPlayer.user.username || blackPlayer.user.email,
       whiteAvatar: whitePlayer.user.avatar,
@@ -188,9 +183,9 @@ async function startGameLogic(room) {
     openingName: openingName,
     mustCaptureWith: null,
     lastMove: null,
-    // ### NOVO: Histórico de jogadas para replay ###
     moveHistory: [],
-    initialBoardState: JSON.parse(JSON.stringify(boardState)), // Salva estado inicial
+    initialBoardState: JSON.parse(JSON.stringify(boardState)),
+    turnCapturedPieces: [], // INICIALIZA O ARRAY DE PEÇAS CAPTURADAS NO TURNO
   };
 
   if (!hasValidMoves(room.game.currentPlayer, room.game)) {
@@ -241,6 +236,7 @@ async function executeMove(roomCode, from, to, socketId) {
     startTimer(roomCode);
   }
 
+  // Validação agora considera peças capturadas (fantasmas)
   const isValid = isMoveValid(from, to, playerColor, game);
 
   if (isValid.valid) {
@@ -255,6 +251,7 @@ async function executeMove(roomCode, from, to, socketId) {
       game.movesSinceCapture++;
     }
 
+    // Move a peça no tabuleiro
     game.boardState[to.row][to.col] = game.boardState[from.row][from.col];
     game.boardState[from.row][from.col] = 0;
 
@@ -264,19 +261,32 @@ async function executeMove(roomCode, from, to, socketId) {
     let wasPromotion = false;
 
     if (isValid.isCapture) {
-      game.boardState[isValid.capturedPos.row][isValid.capturedPos.col] = 0;
+      // CORREÇÃO CRÍTICA: NÃO removemos a peça do tabuleiro imediatamente
+      // Apenas adicionamos à lista de 'mortos-vivos' que servem de obstáculo
+      game.turnCapturedPieces.push(isValid.capturedPos);
+
+      // Verifica se pode capturar mais
       const nextCaptures = getAllPossibleCapturesForPiece(to.row, to.col, game);
       canCaptureAgain = nextCaptures.length > 0;
     }
 
     if (!canCaptureAgain) {
       const currentPiece = game.boardState[to.row][to.col];
+      // Promoção só acontece se parou de capturar
       if (currentPiece === "b" && to.row === 0) {
         game.boardState[to.row][to.col] = "B";
         wasPromotion = true;
       } else if (currentPiece === "p" && to.row === game.boardSize - 1) {
         game.boardState[to.row][to.col] = "P";
         wasPromotion = true;
+      }
+
+      // AGORA SIM, o turno acabou: removemos todas as peças capturadas do tabuleiro
+      if (game.turnCapturedPieces.length > 0) {
+        game.turnCapturedPieces.forEach((p) => {
+          game.boardState[p.row][p.col] = 0;
+        });
+        game.turnCapturedPieces = []; // Limpa a lista
       }
     }
 
@@ -286,14 +296,16 @@ async function executeMove(roomCode, from, to, socketId) {
       game.damaMovesWithoutCaptureOrPawnMove = 0;
     }
 
-    // ### NOVO: Registrar Movimento no Histórico ###
+    // Salva histórico
     game.moveHistory.push({
       from,
       to,
-      boardState: JSON.parse(JSON.stringify(game.boardState)), // Salva cópia do estado após o movimento
+      boardState: JSON.parse(JSON.stringify(game.boardState)),
       turn: playerColor,
+      turnCapturedPieces: [...game.turnCapturedPieces], // Salva o estado das capturadas para replay fiel
     });
 
+    // Lógica de empate por repetição
     let whitePieces = 0;
     let whiteDames = 0;
     let blackPieces = 0;
@@ -325,7 +337,7 @@ async function executeMove(roomCode, from, to, socketId) {
       whitePieces === 1 &&
       whiteDames === 1;
 
-    if (gameRoom.gameMode !== "international") {
+    if (gameRoom.gameMode !== "international" && !canCaptureAgain) {
       if (game.damaMovesWithoutCaptureOrPawnMove >= 40)
         return processEndOfGame(
           null,
@@ -352,15 +364,19 @@ async function executeMove(roomCode, from, to, socketId) {
       }
     }
 
-    const winner = checkWinCondition(game.boardState, game.boardSize);
-    if (winner) {
-      const loser = winner === "b" ? "p" : "b";
-      return processEndOfGame(winner, loser, gameRoom, "Fim de jogo!");
-    }
-
+    // Se acabou o turno (não pode capturar mais)
     if (!canCaptureAgain) {
+      // Checa vitória
+      const winner = checkWinCondition(game.boardState, game.boardSize);
+      if (winner) {
+        const loser = winner === "b" ? "p" : "b";
+        return processEndOfGame(winner, loser, gameRoom, "Fim de jogo!");
+      }
+
       game.mustCaptureWith = null;
       game.currentPlayer = game.currentPlayer === "b" ? "p" : "b";
+
+      // Verifica se o próximo jogador tem movimentos
       if (!hasValidMoves(game.currentPlayer, game)) {
         const winner = game.currentPlayer === "b" ? "p" : "b";
         return processEndOfGame(
@@ -375,6 +391,7 @@ async function executeMove(roomCode, from, to, socketId) {
       game.mustCaptureWith = { row: to.row, col: to.col };
     }
 
+    // Calcula próximas jogadas obrigatórias
     const bestCaptures = findBestCaptureMoves(game.currentPlayer, game);
     const mandatoryPieces = canCaptureAgain
       ? [{ row: to.row, col: to.col }]
@@ -382,6 +399,7 @@ async function executeMove(roomCode, from, to, socketId) {
 
     io.to(roomCode).emit("gameStateUpdate", { ...game, mandatoryPieces });
 
+    // Auto-move se for único E for sequência de captura
     if (canCaptureAgain) {
       const uniqueMove = getUniqueCaptureMove(to.row, to.col, game);
       if (uniqueMove) {
@@ -409,7 +427,7 @@ async function executeMove(roomCode, from, to, socketId) {
   }
 }
 
-// Função para ser chamada externamente pelo gameManager
+// Função para ser chamada externamente pelo gameManager para Tablita
 async function startNextTablitaGame(roomCode) {
   const room = gameRooms[roomCode];
   if (room) {
@@ -637,13 +655,10 @@ function initializeSocket(ioInstance) {
       const { row, col, roomCode } = data;
       const room = gameRooms[roomCode];
       if (!room || !room.game) return socket.emit("showValidMoves", []);
+
       const game = room.game;
-      const piece = game.boardState[row][col];
-      if (piece === 0) return socket.emit("showValidMoves", []);
-      const playerColor = piece.toLowerCase();
-      const isDama = piece.toUpperCase() === piece;
-      let validMoves = [];
-      const bestCaptures = findBestCaptureMoves(playerColor, game);
+      const validMoves = [];
+      const captures = getAllPossibleCapturesForPiece(row, col, game);
 
       if (game.mustCaptureWith) {
         if (
@@ -652,62 +667,35 @@ function initializeSocket(ioInstance) {
         ) {
           return socket.emit("showValidMoves", []);
         }
-        const capturesForThisPiece = getAllPossibleCapturesForPiece(
-          row,
-          col,
-          game
-        );
-        validMoves = capturesForThisPiece.map((seq) => seq[1]);
+        captures.forEach((seq) => validMoves.push(seq[1]));
         return socket.emit("showValidMoves", validMoves);
       }
 
+      const bestCaptures = findBestCaptureMoves(game.currentPlayer, game);
       if (bestCaptures.length > 0) {
-        const capturesForThisPiece = bestCaptures.filter(
+        const capturesForThis = bestCaptures.filter(
           (seq) => seq[0].row === row && seq[0].col === col
         );
-        validMoves = capturesForThisPiece.map((seq) => seq[1]);
+        capturesForThis.forEach((seq) => validMoves.push(seq[1]));
       } else {
-        const directions = [
-          { r: -1, c: -1 },
-          { r: -1, c: 1 },
-          { r: 1, c: -1 },
-          { r: 1, c: 1 },
-        ];
-        const moveDirection = playerColor === "b" ? -1 : 1;
-        if (isDama) {
-          for (const dir of directions) {
-            for (let i = 1; i < game.boardSize; i++) {
-              const toRow = row + i * dir.r;
-              const toCol = col + i * dir.c;
-              if (
-                toRow < 0 ||
-                toRow >= game.boardSize ||
-                toCol < 0 ||
-                toCol >= game.boardSize ||
-                game.boardState[toRow][toCol] !== 0
-              )
-                break;
-              validMoves.push({ row: toRow, col: toCol });
-            }
-          }
-        } else {
-          for (const dir of directions) {
-            if (dir.r === moveDirection) {
-              const toRow = row + dir.r;
-              const toCol = col + dir.c;
-              if (
-                toRow >= 0 &&
-                toRow < game.boardSize &&
-                toCol >= 0 &&
-                toCol < game.boardSize &&
-                game.boardState[toRow][toCol] === 0
-              ) {
-                validMoves.push({ row: toRow, col: toCol });
-              }
+        const boardSize = game.boardSize;
+        for (let r = 0; r < boardSize; r++) {
+          for (let c = 0; c < boardSize; c++) {
+            if (
+              isMoveValid(
+                { row, col },
+                { row: r, col: c },
+                game.currentPlayer,
+                game,
+                true
+              ).valid
+            ) {
+              validMoves.push({ row: r, col: c });
             }
           }
         }
       }
+
       socket.emit("showValidMoves", validMoves);
     });
 

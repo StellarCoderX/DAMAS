@@ -21,6 +21,9 @@ document.addEventListener("DOMContentLoaded", () => {
   let lastPacketTime = Date.now();
   let watchdogInterval = null;
 
+  // ### NOVO: Estado local das peças capturadas na animação atual ###
+  let currentTurnCapturedPieces = [];
+
   // --- VARIÁVEIS PARA REPLAY ---
   let savedReplayData = null;
   let isReplaying = false;
@@ -127,7 +130,6 @@ document.addEventListener("DOMContentLoaded", () => {
         socket.emit("leaveEndGameScreen", { roomCode: currentRoom });
       returnToLobbyLogic();
     }
-    // ### LISTENER PARA BOTÃO DE REPLAY ###
     if (e.target.classList.contains("replay-btn")) {
       startReplay();
     }
@@ -244,7 +246,10 @@ document.addEventListener("DOMContentLoaded", () => {
         boardSize: currentBoardSize,
         currentPlayer: myColor,
         mustCaptureWith: null,
+        // Passa as peças capturadas atuais para o validador local
+        turnCapturedPieces: currentTurnCapturedPieces || [],
       };
+
       const uniqueMove = window.gameLogic.getUniqueCaptureMove(
         row,
         col,
@@ -277,6 +282,7 @@ document.addEventListener("DOMContentLoaded", () => {
     myColor = null;
     currentBoardSize = 8;
     updateQueue = [];
+    currentTurnCapturedPieces = [];
     isProcessingQueue = false;
 
     localStorage.removeItem("checkersCurrentRoom");
@@ -289,6 +295,9 @@ document.addEventListener("DOMContentLoaded", () => {
   async function processGameUpdate(gameState, suppressSound = false) {
     if (!gameState || !gameState.boardState) return;
     lastPacketTime = Date.now();
+
+    // Atualiza estado local das peças capturadas
+    currentTurnCapturedPieces = gameState.turnCapturedPieces || [];
 
     if (gameState.lastMove && !suppressSound) {
       await UI.animatePieceMove(
@@ -312,13 +321,37 @@ document.addEventListener("DOMContentLoaded", () => {
       })
     );
 
-    if (!suppressSound && newPieceCount > 0 && oldPieceCount > 0) {
-      if (newPieceCount < oldPieceCount) UI.playAudio("capture");
-      else UI.playAudio("move");
+    // Ajuste de som: se capturou, toca som, mas peça ainda está lá visualmente (pois backend não removeu).
+    // O backend envia o campo 'mandatoryPieces' se houver continuações.
+    // Se houve captura na lógica, mas a peça está no board, devemos tocar o som de captura se o movimento foi de captura.
+    // Como detectar se foi captura? Podemos ver se o tamanho do salto foi > 1 (simplificação)
+
+    if (!suppressSound) {
+      if (gameState.lastMove) {
+        const dist = Math.abs(
+          gameState.lastMove.from.row - gameState.lastMove.to.row
+        );
+        if (dist > 1) UI.playAudio("capture");
+        else UI.playAudio("move");
+      }
     }
 
     boardState = gameState.boardState;
     UI.renderPieces(boardState, gameState.boardSize);
+
+    // VISUAL: Podemos adicionar classe 'ghost' ou 'captured-temp' nas peças que estão em turnCapturedPieces
+    // para dar feedback visual que elas "já eram", mas estão lá bloqueando.
+    if (currentTurnCapturedPieces.length > 0) {
+      currentTurnCapturedPieces.forEach((pos) => {
+        const cell = document.querySelector(
+          `.square[data-row="${pos.row}"][data-col="${pos.col}"]`
+        );
+        if (cell) {
+          const piece = cell.querySelector(".piece");
+          if (piece) piece.style.opacity = "0.5"; // Visual de peça "fantasma"
+        }
+      });
+    }
 
     if (UI.elements.turnDisplay)
       UI.elements.turnDisplay.textContent =
@@ -395,8 +428,8 @@ document.addEventListener("DOMContentLoaded", () => {
       stopWatchdog();
       updateQueue = [];
       isProcessingQueue = false;
+      currentTurnCapturedPieces = [];
 
-      // GARANTE QUE O OVERLAY DE GAME OVER/NEXT GAME ESTÁ FECHADO
       document.getElementById("game-over-overlay").classList.add("hidden");
       document.getElementById("next-game-overlay").classList.add("hidden");
 
@@ -486,7 +519,6 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     document.getElementById("connection-lost-overlay").classList.add("hidden");
-    // Assegura que o overlay de "Próximo Jogo" suma se estiver por acaso aberto
     document.getElementById("next-game-overlay").classList.add("hidden");
 
     UI.resetEndGameUI();
@@ -552,17 +584,12 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   socket.on("nextGameStarting", (data) => {
-    // AQUI É A CHAVE: NÃO MOSTRAR TELA DE FIM DE JOGO, SÓ O OVERLAY DE TRANSIÇÃO
     const nextOv = document.getElementById("next-game-overlay");
     nextOv.classList.remove("hidden");
-
-    // Garante que não haja modais de fim de jogo abertos
     document.getElementById("game-over-overlay").classList.add("hidden");
-
     document.getElementById(
       "match-score-display"
     ).textContent = `Placar: ${data.score[0]} - ${data.score[1]}`;
-
     let cd = 5;
     const tEl = document.getElementById("next-game-timer");
     tEl.textContent = cd;
