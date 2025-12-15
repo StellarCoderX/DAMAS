@@ -16,6 +16,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let adminSecretKey = null;
   let allUsers = [];
+  let availableOpenings = []; // Lista de sorteios carregada do servidor
 
   secretForm.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -33,7 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
     await loadWithdrawals();
     authContainer.classList.add("hidden");
     adminContainer.classList.remove("hidden");
-    initializeTestBoard();
+    initializeTestBoard(); // Inicializa o tabuleiro e carrega as aberturas
   }
 
   async function loadUsers() {
@@ -342,7 +343,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // --- LÓGICA DO TABULEIRO DE TESTE (Mantida) ---
+  // --- LÓGICA DO TABULEIRO DE TESTE ---
   const standardOpening = [
     [0, "p", 0, "p", 0, "p", 0, "p"],
     ["p", 0, "p", 0, "p", 0, "p", 0],
@@ -367,10 +368,42 @@ document.addEventListener("DOMContentLoaded", () => {
   const undoBoardBtn = document.getElementById("undo-board-btn");
   const testTurnSpan = document.getElementById("test-turn");
 
+  // Novo Elemento Select
+  const openingSelect = document.getElementById("opening-select");
+
+  async function loadOpenings() {
+    try {
+      const response = await fetch("/api/admin/openings", {
+        headers: { "x-admin-secret-key": adminSecretKey },
+      });
+      if (response.ok) {
+        availableOpenings = await response.json();
+        // Popula o select
+        availableOpenings.forEach((op, index) => {
+          const option = document.createElement("option");
+          option.value = index;
+          option.textContent = op.name;
+          openingSelect.appendChild(option);
+        });
+      }
+    } catch (e) {
+      console.error("Erro ao carregar aberturas", e);
+    }
+  }
+
   function initializeTestBoard() {
+    // Carrega as aberturas ao iniciar o tabuleiro
+    loadOpenings();
+
     toggleTestBoardBtn.addEventListener("click", () => {
       testBoardContainer.classList.toggle("hidden");
     });
+
+    // Listener de mudança de sorteio
+    openingSelect.addEventListener("change", (e) => {
+      startTestGame(); // Reinicia o jogo usando o valor selecionado
+    });
+
     resetBoardBtn.addEventListener("click", startTestGame);
     undoBoardBtn.addEventListener("click", handleUndoMove);
     switchTurnBtn.addEventListener("click", () => {
@@ -394,8 +427,20 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function startTestGame() {
+    let initialBoard = standardOpening;
+
+    // Verifica o valor selecionado no dropdown
+    const selectedIdx = parseInt(openingSelect.value);
+    if (selectedIdx >= 0 && availableOpenings[selectedIdx]) {
+      // Usa o tabuleiro do sorteio selecionado (fazendo cópia profunda)
+      initialBoard = availableOpenings[selectedIdx].board;
+      testStatus.textContent = `Sorteio: ${availableOpenings[selectedIdx].name}`;
+    } else {
+      testStatus.textContent = "Abertura Padrão";
+    }
+
     testGame = {
-      boardState: JSON.parse(JSON.stringify(standardOpening)),
+      boardState: JSON.parse(JSON.stringify(initialBoard)),
       boardSize: 8,
       currentPlayer: "b",
     };
@@ -458,14 +503,14 @@ document.addEventListener("DOMContentLoaded", () => {
   function updateTestGameUI() {
     testTurnSpan.textContent =
       testGame.currentPlayer === "b" ? "Brancas" : "Pretas";
-    testStatus.textContent = "";
+    // testStatus.textContent = ""; // Não limpa para manter o nome do sorteio visível
 
     highlightMandatoryPieces([]);
     unselectPiece();
 
     if (!window.gameLogic.hasValidMoves(testGame.currentPlayer, testGame)) {
       const winner = testGame.currentPlayer === "b" ? "Pretas" : "Brancas";
-      testStatus.textContent = `FIM DE JOGO! O jogador ${winner} venceu por bloqueio!`;
+      testStatus.textContent += ` - FIM DE JOGO! ${winner} venceu por bloqueio!`;
       return;
     }
 
@@ -474,7 +519,7 @@ document.addEventListener("DOMContentLoaded", () => {
       testGame
     );
     if (bestCaptures.length > 0) {
-      testStatus.textContent = "Captura Obrigatória!";
+      testStatus.textContent += " - Captura Obrigatória!";
       const mandatoryPieces = bestCaptures.map((seq) => seq[0]);
       highlightMandatoryPieces(mandatoryPieces);
     }

@@ -342,6 +342,18 @@
           </button>
 
           <div id="test-board-container" class="hidden" style="padding: 15px; border-radius: 8px; text-align: center;">
+
+            <!-- SELECTOR DE SORTEIO NOVO -->
+            <div style="margin-bottom: 10px;">
+              <label style="color: var(--text-secondary); font-size: 0.9rem; display:block; margin-bottom:5px;">Sorteio
+                Tablita:</label>
+              <select id="opening-select"
+                style="width: 100%; padding: 10px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 8px;">
+                <option value="-1">Padrão (8x8)</option>
+                <!-- Options populated by JS -->
+              </select>
+            </div>
+
             <p id="test-status" style="color: var(--accent); min-height: 25px; margin-bottom: 10px; font-weight: bold;">
             </p>
 
@@ -363,7 +375,7 @@
 
   <!-- Scripts -->
   <script src="js/gameLogic.js"></script>
-  <script src="js/admin.js?v=8"></script>
+  <script src="js/admin.js?v=9"></script>
 </body>
 
 </html>

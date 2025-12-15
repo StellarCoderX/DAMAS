@@ -21,6 +21,9 @@ const {
 } = require("./src/gameManager");
 const tournamentManager = require("./src/tournamentManager");
 
+// --- IMPORTAR CONSTANTES DE ABERTURA ---
+const { idfTablitaOpenings } = require("./utils/constants");
+
 const app = express();
 app.set("trust proxy", 1);
 
@@ -525,6 +528,11 @@ app.post("/api/admin/reset-all-saldos", adminAuthBody, async (req, res) => {
   res.json({ message: "Saldos zerados." });
 });
 
+// --- ROTA DE ABERTURAS TABLITA (NOVO) ---
+app.get("/api/admin/openings", adminAuthHeader, (req, res) => {
+  res.json(idfTablitaOpenings);
+});
+
 // Inicialização
 initializeManager(io, gameRooms);
 tournamentManager.initializeTournamentManager(io);
@@ -539,14 +547,16 @@ const HISTORY_RETENTION = 24 * 60 * 60 * 1000; // 24 Horas em milissegundos
 setInterval(async () => {
   try {
     const cutoffDate = new Date(Date.now() - HISTORY_RETENTION);
-    
+
     // Deleta partidas cujo 'createdAt' seja anterior à data limite (24h atrás)
-    const result = await MatchHistory.deleteMany({ 
-      createdAt: { $lt: cutoffDate } 
+    const result = await MatchHistory.deleteMany({
+      createdAt: { $lt: cutoffDate },
     });
 
     if (result.deletedCount > 0) {
-      console.log(`[Limpeza Automática] Removidos ${result.deletedCount} registros de histórico com mais de 24 horas.`);
+      console.log(
+        `[Limpeza Automática] Removidos ${result.deletedCount} registros de histórico com mais de 24 horas.`
+      );
     }
   } catch (error) {
     console.error("[Limpeza Automática] Erro ao limpar histórico:", error);
