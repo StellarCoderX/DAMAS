@@ -149,6 +149,15 @@
             <label>Tempo por Jogada (Segundos)</label>
             <select id="timer-select"></select>
           </div>
+
+          <!-- CHECKBOX SALA PRIVADA -->
+          <div class="input-wrapper"
+            style="grid-column: span 3; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 5px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px;">
+            <input type="checkbox" id="private-room-checkbox" style="width: 20px; height: 20px; cursor: pointer;">
+            <label for="private-room-checkbox" style="margin: 0; cursor: pointer; color: #f1c40f; font-weight: bold;">🔒
+              Sala Privada (Oculta)</label>
+          </div>
+
         </div>
         <button id="create-room-btn" class="btn-confirm">INICIAR SALA</button>
         <p id="lobby-error-message"></p>
@@ -159,8 +168,21 @@
         <div class="pulse-ring"></div>
         <p>Aguardando oponente...</p>
         <p class="room-code-label">CÓDIGO: <strong id="room-code-display">---</strong></p>
+        <p style="font-size: 0.8rem; color: #aaa; margin-top: 5px;">Envie este código para seu amigo.</p>
         <div class="loader"></div>
         <button id="cancel-room-btn" class="btn-cancel">Cancelar</button>
+      </div>
+
+      <!-- SEÇÃO PARA ENTRAR COM CÓDIGO -->
+      <div class="lobby-section" style="margin-bottom: 20px;">
+        <h3><i class="fa-solid fa-key"></i> Entrar em Sala Privada</h3>
+        <div style="display: flex; gap: 10px; align-items: center; margin-top: 10px;">
+          <input type="text" id="join-room-code-input" class="modern-input" placeholder="Digite o Código da Sala"
+            style="text-transform: uppercase; margin: 0; font-weight: bold; text-align: center; letter-spacing: 2px;">
+          <button id="join-private-btn" class="btn-confirm"
+            style="width: auto; padding: 12px 20px; background: #3498db;"><i
+              class="fa-solid fa-arrow-right"></i></button>
+        </div>
       </div>
 
       <!-- CARD DE TORNEIO (ATUALIZADO) -->

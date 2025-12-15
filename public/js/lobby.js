@@ -142,6 +142,12 @@ window.initLobby = function (socket, UI) {
       const timerSelect = document.getElementById("timer-select");
       const timerDuration = timerSelect ? timerSelect.value : 40;
 
+      // NOVA LÓGICA: Checa se é privada
+      const isPrivateCheckbox = document.getElementById(
+        "private-room-checkbox"
+      );
+      const isPrivate = isPrivateCheckbox ? isPrivateCheckbox.checked : false;
+
       if (bet > 0 && window.currentUser) {
         socket.emit("createRoom", {
           bet,
@@ -149,6 +155,7 @@ window.initLobby = function (socket, UI) {
           gameMode,
           timerDuration,
           timeControl,
+          isPrivate, // Envia para o servidor
         });
         createRoomBtn.disabled = true;
         createRoomBtn.textContent = "Criando...";
@@ -165,6 +172,27 @@ window.initLobby = function (socket, UI) {
     cancelRoomBtn.addEventListener("click", () => {
       const roomCode = document.getElementById("room-code-display").textContent;
       if (roomCode) socket.emit("cancelRoom", { roomCode });
+    });
+  }
+
+  // --- NOVO: ENTRAR EM SALA PRIVADA POR CÓDIGO ---
+  const joinPrivateBtn = document.getElementById("join-private-btn");
+  if (joinPrivateBtn) {
+    joinPrivateBtn.addEventListener("click", () => {
+      if (!window.currentUser || !window.currentUser.username) {
+        if (window.enforceUsernameRequirement)
+          window.enforceUsernameRequirement();
+        return;
+      }
+
+      const codeInput = document.getElementById("join-room-code-input");
+      const roomCode = codeInput.value.trim().toUpperCase();
+
+      if (roomCode && window.currentUser) {
+        socket.emit("joinRoomRequest", { roomCode, user: window.currentUser });
+      } else {
+        alert("Por favor, digite o código da sala.");
+      }
     });
   }
 

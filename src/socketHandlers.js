@@ -29,7 +29,10 @@ let io; // Variável global para instância do Socket.IO
 
 function getLobbyInfo() {
   const waitingRooms = Object.values(gameRooms)
-    .filter((room) => room.players.length === 1 && !room.isGameConcluded)
+    .filter(
+      (room) =>
+        room.players.length === 1 && !room.isGameConcluded && !room.isPrivate
+    ) // Filtra salas privadas
     .map((room) => {
       const p1 = room.players[0].user;
       return {
@@ -44,7 +47,10 @@ function getLobbyInfo() {
     });
 
   const activeRooms = Object.values(gameRooms)
-    .filter((room) => room.players.length === 2 && !room.isGameConcluded)
+    .filter(
+      (room) =>
+        room.players.length === 2 && !room.isGameConcluded && !room.isPrivate
+    ) // Filtra privadas
     .map((room) => {
       const p1 = room.players[0].user;
       const p2 = room.players[1].user;
@@ -509,7 +515,7 @@ function initializeSocket(ioInstance) {
 
       cleanupPreviousRooms(socket.userData.email);
 
-      const { bet, gameMode, timerDuration, timeControl } = data;
+      const { bet, gameMode, timerDuration, timeControl, isPrivate } = data; // Recebe isPrivate
       const validTimer = parseInt(timerDuration, 10) || 40;
       const validTimeControl =
         timeControl === "match" || timeControl === "move"
@@ -549,6 +555,7 @@ function initializeSocket(ioInstance) {
         disconnectTimeout: null,
         isGameConcluded: false,
         lastOpeningIndex: -1,
+        isPrivate: !!isPrivate, // Salva o status privado
       };
 
       socket.emit("roomCreated", { roomCode });
