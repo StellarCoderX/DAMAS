@@ -163,16 +163,21 @@
         <button id="cancel-room-btn" class="btn-cancel">Cancelar</button>
       </div>
 
-      <!-- CARD DE TORNEIO (ATUALIZADO COM CLASSES PADRÃO PARA FUNCIONAR COM O NOVO JS) -->
+      <!-- CARD DE TORNEIO (ATUALIZADO) -->
       <div class="tournament-card">
         <div class="tournament-header">
           <span><i class="fa-solid fa-trophy"></i> Torneio Diário</span>
           <span id="tournament-info-btn" class="info-icon-btn"><i class="fa-solid fa-circle-info"></i></span>
         </div>
-        <!-- IMPORTANTE: classe 'tournament-body' é usada pelo JS para injetar o pódio/cancelamento -->
         <div class="tournament-body">
-          <h1 class="trn-title" style="color: #f1c40f; font-size: 1.5rem; font-weight: 800; margin-bottom: 10px;">
+          <h1 class="trn-title" style="color: #f1c40f; font-size: 1.5rem; font-weight: 800; margin-bottom: 5px;">
             TORNEIO 21:00</h1>
+
+          <!-- ### NOVO TIMER INTEGRADO ### -->
+          <div id="tournament-inline-timer" class="inline-countdown hidden">
+            <span class="inline-label">INICIA EM:</span>
+            <span id="countdown-timer-display">00:00:00</span>
+          </div>
 
           <p style="color: #cbd5e1; font-size: 0.9rem; margin-bottom: 5px;">👥 Mínimo: <strong>4 Jogadores</strong></p>
 
@@ -180,9 +185,8 @@
             <p style="color: #f1c40f; font-size: 0.85rem; font-weight: bold; margin-bottom: 5px;">🎁 Premiação (do
               Pote):</p>
             <div style="display: flex; justify-content: space-around; font-size: 0.8rem; color: #e2e8f0;">
-              <span>🥇 50%</span>
+              <span>🥇 70%</span>
               <span>🥈 30%</span>
-              <span>🏦 20%</span>
             </div>
           </div>
 
@@ -481,27 +485,52 @@
     </div>
   </div>
 
-  <!-- MODAL INFO TORNEIO -->
+  <!-- MODAL INFO TORNEIO (ATUALIZADO) -->
   <div id="tournament-info-overlay" class="hidden modal-overlay">
     <div class="modal-card" style="max-width: 450px; text-align: left;">
-      <h3 style="color: #f1c40f; margin-bottom: 15px; text-align: center;">🏆 Como Funciona o Torneio</h3>
+      <h3
+        style="color: #f1c40f; margin-bottom: 20px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
+        🏆 Guia do Torneio</h3>
 
-      <div style="color: #ddd; font-size: 0.9rem; line-height: 1.6;">
-        <p>📅 <strong>Quando:</strong> Todos os dias às <strong>21:00</strong>.</p>
-        <p>💰 <strong>Inscrição:</strong> R$ 2,00 (Descontado do saldo).</p>
-        <p>⚔️ <strong>Formato:</strong> Mata-mata (Eliminação Simples).</p>
-        <p>👥 <strong>Mínimo:</strong> 8 Jogadores para iniciar.</p>
+      <div
+        style="text-align:left; line-height:1.6; color:#e0e0e0; font-size: 0.95rem; max-height: 70vh; overflow-y: auto; padding-right: 5px;">
 
-        <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; margin: 15px 0;">
-          <p style="color: #2ecc71; font-weight: bold; margin-bottom: 5px;">🎁 Premiação (Baseada no Pote Total):</p>
-          <ul style="list-style: none; padding: 0;">
-            <li>🥇 <strong>Campeão:</strong> 50% do valor arrecadado.</li>
-            <li>🥈 <strong>Vice:</strong> 30% do valor arrecadado.</li>
-            <li>🏦 <strong>Taxa:</strong> 20% para manutenção.</li>
+        <div style="margin-bottom: 15px;">
+          <h4 style="color: #3498db; margin-bottom: 5px;"><i class="fa-regular fa-clock"></i> Horário & Inscrição</h4>
+          <p style="margin-left: 10px;">• <strong>Início:</strong> Todos os dias às <strong>21:00</strong> (Horário de
+            Brasília).</p>
+          <p style="margin-left: 10px;">• <strong>Entrada:</strong> R$ 2,00 (Debitado do saldo).</p>
+          <p style="margin-left: 10px;">• <strong>Check-in:</strong> Esteja online no lobby 2 minutos antes.</p>
+        </div>
+
+        <div style="margin-bottom: 15px;">
+          <h4 style="color: #2ecc71; margin-bottom: 5px;"><i class="fa-solid fa-sack-dollar"></i> Premiação (Sem Taxas!)
+          </h4>
+          <p style="margin-left: 10px;">O valor total das inscrições vai para o pote e é dividido assim:</p>
+          <ul style="margin-left: 25px; list-style-type: none; padding:0;">
+            <li>🥇 <strong>Campeão:</strong> Leva 70% do pote.</li>
+            <li>🥈 <strong>Vice-Campeão:</strong> Leva 30% do pote.</li>
           </ul>
         </div>
 
-        <p>⚠️ <strong>Atenção:</strong> Esteja online no lobby 2 minutos antes para o início automático.</p>
+        <div style="margin-bottom: 15px;">
+          <h4 style="color: #e74c3c; margin-bottom: 5px;"><i class="fa-solid fa-chess-board"></i> Regras da Partida</h4>
+          <p style="margin-left: 10px;">• <strong>Formato:</strong> Mata-mata (Eliminação Simples).</p>
+          <p style="margin-left: 10px;">• <strong>Tempo:</strong> Jogo rápido! <strong>7 segundos</strong> por jogada.
+          </p>
+          <p style="margin-left: 10px;">• <strong>Mínimo:</strong> 4 jogadores para o torneio acontecer.</p>
+        </div>
+
+        <div
+          style="background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 6px; border-left: 3px solid #f1c40f;">
+          <h4 style="color: #f1c40f; margin-bottom: 5px; font-size: 0.9rem;">🤝 Critérios de Desempate</h4>
+          <p style="font-size: 0.85rem;">Se a partida terminar empatada:</p>
+          <ol style="margin-left: 20px; font-size: 0.85rem; margin-bottom: 0;">
+            <li><strong>Revanche Imediata:</strong> Nova partida no modo <strong>Tablita</strong>.</li>
+            <li><strong>Tempo Reduzido:</strong> 5 segundos por jogada.</li>
+            <li><strong>Morte Súbita:</strong> Repete-se até haver um vencedor.</li>
+          </ol>
+        </div>
       </div>
 
       <div style="text-align: center; margin-top: 15px;">
@@ -531,18 +560,7 @@
     </div>
   </div>
 
-  <!-- ### NOVA NOTIFICAÇÃO DE CONTAGEM REGRESSIVA ### -->
-  <div id="tournament-countdown-notification" class="hidden">
-    <div class="countdown-content">
-      <div class="countdown-icon">
-        <i class="fa-solid fa-clock"></i>
-      </div>
-      <div class="countdown-text">
-        <span class="countdown-label">TORNEIO INICIA EM:</span>
-        <span id="countdown-timer-display">00:00:00</span>
-      </div>
-    </div>
-  </div>
+  <!-- REMOVIDO AQUI O TIMER FLUTUANTE ANTIGO -->
 
   <!-- ÁUDIOS -->
   <audio id="move-sound" src="/sounds/move.mp3"></audio>

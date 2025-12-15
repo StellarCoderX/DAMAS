@@ -34,9 +34,9 @@ window.initLobby = function (socket, UI) {
     }
   }
 
-  // --- FUNÇÃO DE CONTAGEM REGRESSIVA (NOVA) ---
+  // --- FUNÇÃO DE CONTAGEM REGRESSIVA (ATUALIZADA: TIMER EMBUTIDO) ---
   function startTournamentTimer() {
-    const notif = document.getElementById("tournament-countdown-notification");
+    const timerContainer = document.getElementById("tournament-inline-timer");
     const timerDisplay = document.getElementById("countdown-timer-display");
 
     if (tournamentCountdownInterval) clearInterval(tournamentCountdownInterval);
@@ -49,37 +49,39 @@ window.initLobby = function (socket, UI) {
 
       target.setHours(targetHour, targetMinute, 0, 0);
 
-      // Se já passou das 20h hoje, aponta para amanhã (ou assume que começou)
-      // Mas se for 20:05, o torneio já deve estar rolando, então escondemos
-      // Vamos dar uma margem de 10 minutos após o início
       const diff = target - now;
 
+      // Se já passou muito tempo (ex: 10 min depois), esconde o timer
       if (diff < -600000) {
-        // Passou 10 min
-        notif.classList.add("hidden");
+        if (timerContainer) timerContainer.classList.add("hidden");
         clearInterval(tournamentCountdownInterval);
         return;
       }
 
       if (diff < 0) {
-        // Estamos entre 20:00 e 20:10 (Iniciando)
-        timerDisplay.textContent = "INICIANDO...";
-        timerDisplay.style.color = "#e74c3c"; // Vermelho
-        notif.classList.remove("hidden");
+        // Estamos no horário (21:00 - 21:10)
+        if (timerDisplay) {
+          timerDisplay.textContent = "INICIANDO...";
+          timerDisplay.style.color = "#e74c3c"; // Vermelho
+        }
+        if (timerContainer) timerContainer.classList.remove("hidden");
         return;
       }
 
-      // Formata HH:MM:SS
+      // Calculando tempo restante
       const hours = Math.floor(diff / (1000 * 60 * 60));
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
-      timerDisplay.textContent = `${hours.toString().padStart(2, "0")}:${minutes
-        .toString()
-        .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
-
-      timerDisplay.style.color = "white";
-      notif.classList.remove("hidden");
+      if (timerDisplay) {
+        timerDisplay.textContent = `${hours
+          .toString()
+          .padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds
+          .toString()
+          .padStart(2, "0")}`;
+        timerDisplay.style.color = "#f1c40f"; // Gold
+      }
+      if (timerContainer) timerContainer.classList.remove("hidden");
     };
 
     updateTimer(); // Chama uma vez imediatamente
@@ -88,8 +90,8 @@ window.initLobby = function (socket, UI) {
 
   function stopTournamentTimer() {
     if (tournamentCountdownInterval) clearInterval(tournamentCountdownInterval);
-    const notif = document.getElementById("tournament-countdown-notification");
-    if (notif) notif.classList.add("hidden");
+    const timerContainer = document.getElementById("tournament-inline-timer");
+    if (timerContainer) timerContainer.classList.add("hidden");
   }
 
   // ... (Código de Toggle e Autenticação mantido igual) ...
@@ -468,9 +470,39 @@ window.initLobby = function (socket, UI) {
       const joinBtn = document.getElementById("join-tournament-btn");
       const leaveBtn = document.getElementById("leave-tournament-btn");
 
-      if (countEl) countEl.textContent = `Inscritos: ${data.participantsCount}`;
+      if (countEl)
+        countEl.innerHTML = `Inscritos: ${data.participantsCount} <span style="font-size:0.8em; opacity:0.7;">(Mín. 4)</span>`;
       if (prizeEl)
-        prizeEl.textContent = `Prêmio: R$ ${data.prizePool.toFixed(2)}`;
+        prizeEl.innerHTML = `Prêmio: R$ ${data.prizePool.toFixed(
+          2
+        )} <span style="font-size:0.8em; opacity:0.7;">(Entrada: R$ ${data.entryFee.toFixed(
+          2
+        )})</span>`;
+
+      // Remove qualquer texto estático antigo sobre taxas que esteja visível no cartão
+      const taxTexts = document.querySelectorAll(
+        ".tournament-body p, .tournament-body small, .tournament-body span"
+      );
+      taxTexts.forEach((el) => {
+        if (
+          el !== prizeEl &&
+          el !== countEl &&
+          (el.textContent.toLowerCase().includes("taxa") ||
+            el.textContent.toLowerCase().includes("manutenção"))
+        ) {
+          el.style.display = "none";
+        }
+      });
+
+      const body = document.querySelector(".tournament-body");
+      if (body && !document.getElementById("trn-info-display")) {
+        const info = document.createElement("div");
+        info.id = "trn-info-display";
+        info.style.cssText =
+          "text-align: center; margin-bottom: 10px; color: #f1c40f; font-weight: bold;";
+        info.innerHTML = `<i class="fa-regular fa-clock"></i> Início às 21:00 BRT`;
+        body.insertBefore(info, body.firstChild);
+      }
 
       if (joinBtn && leaveBtn) {
         if (data.status === "open") {
@@ -794,9 +826,40 @@ window.initLobby = function (socket, UI) {
   if (trnInfoBtn)
     trnInfoBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      document
-        .getElementById("tournament-info-overlay")
-        .classList.remove("hidden");
+      const overlay = document.getElementById("tournament-info-overlay");
+
+      // Atualiza dinamicamente o conteúdo do modal para remover a informação da taxa antiga
+      const content = overlay.querySelector(".modal-content");
+      if (content) {
+        content.innerHTML = `
+            <span id="close-tournament-info-btn" style="position:absolute; top:10px; right:20px; font-size:2rem; cursor:pointer; color:#fff;">&times;</span>
+            <h2 style="color:#f1c40f; margin-bottom:15px; text-align:center;">Regras do Torneio</h2>
+            <div style="text-align:left; line-height:1.6; color:#ddd; padding:0 10px;">
+                <p><strong>🕒 Início:</strong> 21:00 BRT</p>
+                <p><strong>💰 Entrada:</strong> R$ 2,00</p>
+                <p><strong>🏆 Premiação:</strong> 100% distribuído (Sem taxas!)</p>
+                <ul style="margin-left:20px; margin-bottom:10px;">
+                    <li>🥇 Campeão: 70%</li>
+                    <li>🥈 Vice: 30%</li>
+                </ul>
+                <p><strong>🚫 Taxa Administrativa:</strong> 0% (Isento)</p>
+                <p><strong>⚔️ Formato:</strong> Mata-mata (7s por jogada)</p>
+                <div style="background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 6px; border-left: 3px solid #f1c40f; margin-top: 10px;">
+                    <h4 style="color: #f1c40f; margin-bottom: 5px; font-size: 0.9rem;">🤝 Critérios de Desempate</h4>
+                    <p style="font-size: 0.85rem;">Se a partida terminar empatada:</p>
+                    <ol style="margin-left: 20px; font-size: 0.85rem; margin-bottom: 0;">
+                        <li><strong>Revanche Imediata:</strong> Nova partida no modo <strong>Tablita</strong>.</li>
+                        <li><strong>Tempo Reduzido:</strong> 5 segundos por jogada.</li>
+                        <li><strong>Morte Súbita:</strong> Repete-se até haver um vencedor.</li>
+                    </ol>
+                </div>
+            </div>
+        `;
+        // Reata o evento de fechar no novo botão criado
+        const closeBtn = content.querySelector("#close-tournament-info-btn");
+        if (closeBtn) closeBtn.onclick = () => overlay.classList.add("hidden");
+      }
+      overlay.classList.remove("hidden");
     });
   document
     .getElementById("close-tournament-info-btn")

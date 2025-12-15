@@ -1,6 +1,7 @@
 const Tournament = require("../models/Tournament");
 const User = require("../models/User");
-const { gameRooms } = require("./socketHandlers");
+// Note: gameRooms is required inside functions to avoid circular dependency issues at startup if they exist
+// const { gameRooms } = require("./socketHandlers");
 
 // Configurações
 const MIN_PLAYERS = 4;
@@ -345,6 +346,8 @@ async function processRoundMatches(tournament) {
           );
           const currentT = await Tournament.findById(tournament._id);
           if (currentT && currentT.status === "active") {
+            // Em vez de cancelar tudo, poderíamos dar W.O., mas por simplicidade mantemos o cancelamento seguro
+            // (Melhoria futura: W.O. automático)
             await cancelTournamentAndRefund(
               currentT,
               "Falha técnica: Partida não iniciada (Timeout)."
@@ -367,6 +370,61 @@ async function handleTournamentGameEnd(winnerEmail, loserEmail, room) {
     (m) => m.matchId === room.matchId
   );
   if (matchIndex === -1) return;
+
+  // #######################################################
+  // ### LÓGICA DE EMPATE: REVANCHE TABLITA 5s
+  // #######################################################
+  if (!winnerEmail) {
+    console.log(
+      `[Torneio] Empate na partida ${room.matchId}. Iniciando revanche (Tablita 5s).`
+    );
+
+    const match = tournament.matches[matchIndex];
+    const p1 = match.player1;
+    const p2 = match.player2;
+
+    // 1. Gerar novo código de sala para a revanche
+    const newRoomCode = `TRN-TB-${Math.random()
+      .toString(36)
+      .substring(2, 6)
+      .toUpperCase()}`;
+
+    // 2. Atualizar o match no banco de dados (novo roomCode, mantém status 'active')
+    match.roomCode = newRoomCode;
+    match.status = "active";
+    await tournament.save();
+
+    // 3. Criar a sala na memória (gameRooms)
+    const { gameRooms } = require("./socketHandlers");
+
+    gameRooms[newRoomCode] = {
+      roomCode: newRoomCode,
+      bet: 0,
+      gameMode: "tablita", // FORÇA O MODO TABLITA
+      timeControl: "move",
+      timerDuration: 5, // FORÇA 5 SEGUNDOS
+      players: [],
+      isTournament: true,
+      matchId: match.matchId,
+      tournamentId: tournament._id,
+      isGameConcluded: false,
+      expectedPlayers: [p1, p2],
+      isRematch: true, // Flag útil para logs
+    };
+
+    // 4. Emitir evento para os jogadores entrarem na nova sala
+    io.emit("tournamentMatchReady", {
+      matchId: match.matchId,
+      player1: p1,
+      player2: p2,
+      roomCode: newRoomCode,
+      isRematch: true,
+    });
+
+    // Retorna para NÃO processar vitória/derrota ainda
+    return;
+  }
+  // #######################################################
 
   tournament.matches[matchIndex].winner = winnerEmail;
   tournament.matches[matchIndex].status = "finished";
@@ -439,11 +497,11 @@ async function distributePrizes(tournament, championEmail) {
   tournament.status = "completed";
 
   const totalPool = tournament.prizePool;
-  // 50% Campeão
-  const championPrize = totalPool * 0.5;
+  // 70% Campeão (Sem taxa da banca)
+  const championPrize = totalPool * 0.7;
   // 30% Vice
   const runnerUpPrize = totalPool * 0.3;
-  // 20% Banca (Fica no sistema, não fazemos nada)
+  // 0% Banca
 
   if (championEmail) {
     const updatedChampion = await User.findOneAndUpdate(

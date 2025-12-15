@@ -294,90 +294,39 @@
   padding: 20px 0;
 }
 
-/* 7. NOTIFICAÇÃO FLUTUANTE DE CONTAGEM REGRESSIVA */
-#tournament-countdown-notification {
-  position: fixed;
-  bottom: 80px; /* Fica acima do footer/menu inferior */
-  right: 20px;
-  background: rgba(20, 30, 48, 0.95);
-  border: 2px solid #f1c40f;
-  border-radius: 50px;
-  padding: 10px 25px 10px 10px;
+/* 7. ESTILO DO TIMER EMBUTIDO (NOVO) */
+.inline-countdown {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px dashed #f1c40f;
+  border-radius: 8px;
+  padding: 8px;
+  margin: 10px 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  box-shadow: 0 0 20px rgba(241, 196, 15, 0.4);
-  z-index: 2000;
-  animation: slideUp 0.5s ease-out;
-  backdrop-filter: blur(5px);
-  transition: opacity 0.5s;
+  justify-content: center;
+  animation: fadeIn 0.5s ease-in;
 }
 
-#tournament-countdown-notification.hidden {
+.inline-countdown.hidden {
   display: none;
 }
 
-@keyframes slideUp {
-  from {
-    transform: translateY(100px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.countdown-content {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-}
-
-.countdown-icon {
-  background: #f1c40f;
-  color: #2c3e50;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 1.2rem;
-  box-shadow: 0 0 10px #f1c40f;
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.1);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-.countdown-text {
-  display: flex;
-  flex-direction: column;
-}
-
-.countdown-label {
+.inline-label {
   font-size: 0.7rem;
-  color: #f1c40f;
-  font-weight: bold;
+  color: #cbd5e1;
   letter-spacing: 1px;
+  font-weight: bold;
   text-transform: uppercase;
 }
 
 #countdown-timer-display {
-  font-size: 1.5rem;
+  font-size: 1.8rem;
   font-weight: 800;
-  font-family: "Courier New", monospace; /* Fonte monoespaçada para evitar pulos */
-  color: white;
-  line-height: 1;
+  font-family: "Courier New", monospace;
+  color: #f1c40f;
+  line-height: 1.2;
+  text-shadow: 0 0 5px rgba(241, 196, 15, 0.5);
 }
 
 /* Animações auxiliares */
@@ -398,28 +347,5 @@
   to {
     transform: translateY(0);
     opacity: 1;
-  }
-}
-
-/* Responsividade para Mobile */
-@media (max-width: 768px) {
-  #tournament-countdown-notification {
-    bottom: 70px; /* Ajuste para menus inferiores em mobile */
-    right: 50%;
-    transform: translateX(50%); /* Centraliza horizontalmente */
-    width: 90%;
-    justify-content: center;
-    border-radius: 12px; /* Menos arredondado em mobile para caber mais texto */
-  }
-
-  @keyframes slideUp {
-    from {
-      transform: translate(50%, 100px);
-      opacity: 0;
-    }
-    to {
-      transform: translate(50%, 0);
-      opacity: 1;
-    }
   }
 }
