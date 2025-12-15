@@ -4,6 +4,43 @@ window.initLobby = function (socket, UI) {
   let paymentCheckInterval = null;
   let tempRoomCode = null;
 
+  // --- FUNÇÃO PARA OBRIGAR O NOME (NOVO) ---
+  function enforceUsernameRequirement() {
+    if (window.currentUser && (!window.currentUser.username || window.currentUser.username.trim() === "")) {
+      const profileOverlay = document.getElementById("profile-overlay");
+      const closeBtn = document.getElementById("close-profile-btn");
+      const msg = document.getElementById("profile-message");
+      const usernameInput = document.getElementById("profile-username-input");
+      const avatarInput = document.getElementById("profile-avatar-input");
+      const preview = document.getElementById("profile-preview-img");
+
+      // Abre o modal
+      if (profileOverlay) {
+        profileOverlay.classList.remove("hidden");
+      }
+      
+      // Esconde o botão de fechar para obrigar o cadastro
+      if (closeBtn) {
+        closeBtn.style.display = "none";
+      }
+      
+      // Mensagem de aviso
+      if (msg) {
+        msg.innerHTML = "<i class='fa-solid fa-circle-exclamation'></i> Defina um Apelido para continuar.";
+        msg.style.color = "#f1c40f"; // Amarelo alerta
+        msg.style.fontWeight = "bold";
+      }
+
+      // Preenche campos se estiverem vazios (apenas visual)
+      if (usernameInput) usernameInput.focus();
+      
+      // Atualiza preview se necessário
+      if (preview && (!preview.src || preview.src === "")) {
+         preview.src = `https://ui-avatars.com/api/?name=User&background=random`;
+      }
+    }
+  }
+
   // --- LÓGICA DE TOGGLE (ABRIR/FECHAR CRIAÇÃO DE SALA) ---
   const createRoomToggle = document.getElementById("btn-toggle-create-room");
   if (createRoomToggle) {
@@ -135,6 +172,9 @@ window.initLobby = function (socket, UI) {
           updateLobbyWelcome();
           updateTournamentStatus();
           socket.connect();
+          
+          // VERIFICA SE TEM NOME
+          enforceUsernameRequirement();
         } else {
           const msg = document.getElementById("auth-message");
           msg.textContent = data.message;
@@ -167,6 +207,12 @@ window.initLobby = function (socket, UI) {
   const createRoomBtn = document.getElementById("create-room-btn");
   if (createRoomBtn) {
     createRoomBtn.addEventListener("click", () => {
+      // Bloqueia se não tiver nome
+      if (!window.currentUser.username) {
+        enforceUsernameRequirement();
+        return;
+      }
+
       const betInput = document.getElementById("bet-amount-input"); // Usando ID direto para garantir
       const bet = parseInt(betInput.value, 10);
       const gameMode = document.getElementById("game-mode-select").value;
@@ -203,6 +249,11 @@ window.initLobby = function (socket, UI) {
   // Delegação de eventos para botões dinâmicos (Entrar/Assistir)
   document.getElementById("lobby-container").addEventListener("click", (e) => {
     if (e.target.classList.contains("join-room-btn")) {
+      // Bloqueia se não tiver nome
+      if (!window.currentUser || !window.currentUser.username) {
+        enforceUsernameRequirement();
+        return;
+      }
       const roomCode = e.target.dataset.roomCode;
       if (roomCode && window.currentUser) {
         socket.emit("joinRoomRequest", { roomCode, user: window.currentUser });
@@ -246,6 +297,14 @@ window.initLobby = function (socket, UI) {
     openProfileBtn.addEventListener("click", () => {
       if (!window.currentUser) return;
       profileOverlay.classList.remove("hidden");
+      
+      // Garante que o botão de fechar apareça se o usuário JÁ tem nome
+      if (window.currentUser.username) {
+        if (closeProfileBtn) closeProfileBtn.style.display = "block";
+      } else {
+        if (closeProfileBtn) closeProfileBtn.style.display = "none";
+      }
+
       usernameInput.value = window.currentUser.username || "";
       avatarInput.value = window.currentUser.avatar || "";
 
@@ -269,6 +328,12 @@ window.initLobby = function (socket, UI) {
       const newUsername = usernameInput.value.trim();
       const newAvatar = avatarInput.value.trim();
 
+      if (!newUsername) {
+        profileMsg.textContent = "O nome não pode ficar vazio.";
+        profileMsg.style.color = "#e74c3c";
+        return;
+      }
+
       saveProfileBtn.disabled = true;
       saveProfileBtn.textContent = "Salvando...";
 
@@ -289,6 +354,10 @@ window.initLobby = function (socket, UI) {
           updateLobbyWelcome();
           profileMsg.textContent = "Perfil atualizado!";
           profileMsg.style.color = "#2ecc71";
+          
+          // Re-habilita o botão de fechar pois agora temos um nome
+          if (closeProfileBtn) closeProfileBtn.style.display = "block";
+
           setTimeout(() => profileOverlay.classList.add("hidden"), 1500);
         } else {
           profileMsg.textContent = data.message;
@@ -573,6 +642,12 @@ window.initLobby = function (socket, UI) {
   if (joinTournamentBtn) {
     joinTournamentBtn.addEventListener("click", async () => {
       if (!window.currentUser) return alert("Faça login.");
+      // Bloqueio de nome
+      if (!window.currentUser.username) {
+        enforceUsernameRequirement();
+        return;
+      }
+
       try {
         const res = await fetch("/api/tournament/register", {
           method: "POST",
@@ -637,6 +712,9 @@ window.initLobby = function (socket, UI) {
           updateLobbyWelcome();
           updateTournamentStatus();
           socket.connect();
+          
+          // VERIFICA SE TEM NOME AO RECARREGAR
+          enforceUsernameRequirement();
         } else {
           localStorage.removeItem("checkersUserEmail");
         }
