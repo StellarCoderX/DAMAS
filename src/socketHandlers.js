@@ -395,6 +395,7 @@ async function executeMove(roomCode, from, to, socketId, clientMoveId = null) {
 
       game.mustCaptureWith = null;
       game.currentPlayer = game.currentPlayer === "b" ? "p" : "b";
+      game.turnCapturedPieces = []; // Garante limpeza de peças fantasmas na troca de turno
 
       // Verifica se o próximo jogador tem movimentos
       if (!hasValidMoves(game.currentPlayer, game)) {
@@ -620,26 +621,49 @@ function initializeSocket(ioInstance) {
         return;
       }
 
+      const creatorEmail = room.players[0].user.email;
+      const joinerEmail = socket.userData.email;
+      const bet = room.bet;
+
+      // 1. Cobrança Atômica do Criador
+      const creatorUpdate = await User.findOneAndUpdate(
+        { email: creatorEmail, saldo: { $gte: bet } },
+        [{ $set: { saldo: { $round: [{ $add: ["$saldo", -bet] }, 2] } } }],
+        { new: true }
+      );
+
+      if (!creatorUpdate) {
+        io.to(room.players[0].socketId).emit("joinError", {
+          message: "O criador da sala não tem saldo suficiente.",
+        });
+        delete gameRooms[roomCode];
+        io.emit("updateLobby", getLobbyInfo());
+        return;
+      }
+
+      // 2. Cobrança Atômica do Entrante
+      const joinerUpdate = await User.findOneAndUpdate(
+        { email: joinerEmail, saldo: { $gte: bet } },
+        [{ $set: { saldo: { $round: [{ $add: ["$saldo", -bet] }, 2] } } }],
+        { new: true }
+      );
+
+      if (!joinerUpdate) {
+        // Reembolsa o criador se o entrante falhar
+        await User.findOneAndUpdate({ email: creatorEmail }, [
+          { $set: { saldo: { $round: [{ $add: ["$saldo", bet] }, 2] } } },
+        ]);
+        socket.emit("joinError", { message: "Saldo insuficiente." });
+        return;
+      }
+
       if (room.disconnectTimeout) {
         clearTimeout(room.disconnectTimeout);
         room.disconnectTimeout = null;
       }
       socket.join(roomCode);
       room.players.push({ socketId: socket.id, user: socket.userData });
-      try {
-        await User.findOneAndUpdate({ email: room.players[0].user.email }, [
-          { $set: { saldo: { $round: [{ $add: ["$saldo", -room.bet] }, 2] } } },
-        ]);
-        await User.findOneAndUpdate({ email: room.players[1].user.email }, [
-          { $set: { saldo: { $round: [{ $add: ["$saldo", -room.bet] }, 2] } } },
-        ]);
-      } catch (err) {
-        io.to(room.roomCode).emit("joinError", {
-          message: "Erro ao processar a aposta.",
-        });
-        delete gameRooms[roomCode];
-        return;
-      }
+
       await startGameLogic(room);
       io.emit("updateLobby", getLobbyInfo());
     });
@@ -926,29 +950,49 @@ function initializeSocket(ioInstance) {
           try {
             const player1 = room.players[0];
             const player2 = room.players[1];
-            const user1 = await User.findOne({ email: player1.user.email });
-            const user2 = await User.findOne({ email: player2.user.email });
-            if (user1.saldo < room.bet || user2.saldo < room.bet) {
+            const bet = room.bet;
+
+            // Cobrança Atômica P1
+            const p1Update = await User.findOneAndUpdate(
+              { email: player1.user.email, saldo: { $gte: bet } },
+              [
+                {
+                  $set: { saldo: { $round: [{ $add: ["$saldo", -bet] }, 2] } },
+                },
+              ],
+              { new: true }
+            );
+
+            if (!p1Update) {
               io.to(room.roomCode).emit("revancheDeclined", {
-                message: "Um dos jogadores não tem saldo suficiente.",
+                message: "Jogador 1 sem saldo suficiente.",
               });
               delete gameRooms[room.roomCode];
               return;
             }
-            await User.findOneAndUpdate({ email: player1.user.email }, [
-              {
-                $set: {
-                  saldo: { $round: [{ $add: ["$saldo", -room.bet] }, 2] },
+
+            // Cobrança Atômica P2
+            const p2Update = await User.findOneAndUpdate(
+              { email: player2.user.email, saldo: { $gte: bet } },
+              [
+                {
+                  $set: { saldo: { $round: [{ $add: ["$saldo", -bet] }, 2] } },
                 },
-              },
-            ]);
-            await User.findOneAndUpdate({ email: player2.user.email }, [
-              {
-                $set: {
-                  saldo: { $round: [{ $add: ["$saldo", -room.bet] }, 2] },
-                },
-              },
-            ]);
+              ],
+              { new: true }
+            );
+
+            if (!p2Update) {
+              // Reembolsa P1
+              await User.findOneAndUpdate({ email: player1.user.email }, [
+                { $set: { saldo: { $round: [{ $add: ["$saldo", bet] }, 2] } } },
+              ]);
+              io.to(room.roomCode).emit("revancheDeclined", {
+                message: "Jogador 2 sem saldo suficiente.",
+              });
+              delete gameRooms[room.roomCode];
+              return;
+            }
 
             // FIX: Reset match state for Tablita to force new opening on rematch
             if (room.gameMode === "tablita") {

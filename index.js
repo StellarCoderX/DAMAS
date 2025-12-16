@@ -61,6 +61,18 @@ mongoose
 app.post("/api/register", async (req, res) => {
   try {
     const { email, password, referralCode } = req.body;
+
+    // Validação de Segurança (Email e Senha)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      return res.status(400).json({ message: "Formato de e-mail inválido." });
+    }
+    if (!password || password.length < 6) {
+      return res
+        .status(400)
+        .json({ message: "A senha deve ter no mínimo 6 caracteres." });
+    }
+
     const emailLower = email.toLowerCase();
     const existingUser = await User.findOne({ email: emailLower });
     if (existingUser)
@@ -115,6 +127,19 @@ app.put("/api/user/profile", async (req, res) => {
 
     // Verifica se o username já existe em OUTRO usuário
     if (username) {
+      // Validação de Username (Segurança contra XSS e formato)
+      if (username.length < 3 || username.length > 20) {
+        return res.status(400).json({
+          message: "O nome de usuário deve ter entre 3 e 20 caracteres.",
+        });
+      }
+      // Permite apenas letras, números, espaços, underscores e hífens
+      if (!/^[a-zA-Z0-9 _-]+$/.test(username)) {
+        return res
+          .status(400)
+          .json({ message: "O nome de usuário contém caracteres inválidos." });
+      }
+
       const existing = await User.findOne({ username: username });
       if (existing && existing.email !== email.toLowerCase()) {
         return res
@@ -354,6 +379,12 @@ app.post("/api/payment/create_preference", async (req, res) => {
 });
 
 app.post("/api/payment/webhook", async (req, res) => {
+  // Validação de Segurança: Verifica assinatura ou ID de requisição para evitar flood
+  const signature = req.headers["x-signature"] || req.headers["x-request-id"];
+  if (!signature) {
+    return res.status(403).json({ message: "Requisição não autorizada." });
+  }
+
   const { data, type } = req.body;
   res.sendStatus(200);
 
@@ -366,7 +397,11 @@ app.post("/api/payment/webhook", async (req, res) => {
   if (isPayment) {
     try {
       if (!client) return;
-      const paymentId = data ? data.id : req.body.data.id;
+
+      // Extração segura do ID
+      const paymentId = data?.id || req.body?.data?.id;
+      if (!paymentId) return;
+
       const paymentClient = new Payment(client);
       const payment = await paymentClient.get({ id: paymentId });
 
@@ -566,3 +601,58 @@ const HOST = process.env.HOST || "0.0.0.0";
 server.listen(PORT, HOST, () => {
   console.log(`Servidor rodando em http://${HOST}:${PORT}`);
 });
+
+// --- GRACEFUL SHUTDOWN (Reembolso em caso de reinício) ---
+async function gracefulShutdown() {
+  console.log(
+    "\n⚠️  Recebido sinal de desligamento. Verificando partidas ativas..."
+  );
+
+  if (!gameRooms || Object.keys(gameRooms).length === 0) {
+    console.log("✅ Nenhuma sala ativa. Encerrando.");
+    process.exit(0);
+  }
+
+  const activeRooms = Object.values(gameRooms);
+  const refundPromises = activeRooms.map(async (room) => {
+    // Reembolsa apenas se:
+    // 1. Tiver 2 jogadores (significa que a aposta foi cobrada de ambos)
+    // 2. O jogo não estiver concluído
+    // 3. Não for torneio (saldo gerido na inscrição)
+    if (
+      room.players.length === 2 &&
+      !room.isGameConcluded &&
+      !room.isTournament
+    ) {
+      try {
+        const bet = Number(room.bet);
+        if (bet > 0) {
+          const p1Email = room.players[0].user.email;
+          const p2Email = room.players[1].user.email;
+
+          console.log(
+            `🔄 Reembolsando ${bet} para ${p1Email} e ${p2Email} (Sala: ${room.roomCode})`
+          );
+
+          await User.findOneAndUpdate(
+            { email: p1Email },
+            { $inc: { saldo: bet } }
+          );
+          await User.findOneAndUpdate(
+            { email: p2Email },
+            { $inc: { saldo: bet } }
+          );
+        }
+      } catch (err) {
+        console.error(`❌ Erro ao reembolsar sala ${room.roomCode}:`, err);
+      }
+    }
+  });
+
+  await Promise.all(refundPromises);
+  console.log("✅ Processo de reembolso finalizado. Tchau!");
+  process.exit(0);
+}
+
+process.on("SIGTERM", gracefulShutdown);
+process.on("SIGINT", gracefulShutdown);
