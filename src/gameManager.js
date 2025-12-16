@@ -136,26 +136,33 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
   // ### LÓGICA DE TORNEIO ###
   if (room.isTournament) {
     room.isGameConcluded = true; // Torneio encerra na hora
-    const winnerSocketId =
-      room.game.players[winnerColor === "b" ? "white" : "black"];
-    const winnerData = room.players.find((p) => p.socketId === winnerSocketId);
 
-    const loserSocketId =
-      room.game.players[loserColor === "b" ? "white" : "black"];
+    let winnerSocketId = null;
+    let loserSocketId = null;
+
+    if (winnerColor) {
+      winnerSocketId =
+        room.game.players[winnerColor === "b" ? "white" : "black"];
+      loserSocketId = room.game.players[loserColor === "b" ? "white" : "black"];
+    }
+
+    const winnerData = room.players.find((p) => p.socketId === winnerSocketId);
     const loserData = room.players.find((p) => p.socketId === loserSocketId);
 
     const winnerEmail = winnerData ? winnerData.user.email : null;
     const loserEmail = loserData ? loserData.user.email : null;
 
-    io.to(room.roomCode).emit("gameOver", {
-      winner: winnerColor,
-      reason: `Torneio: ${reason} Vencedor avança!`,
-      isTournament: true,
-      moveHistory: room.game.moveHistory,
-      initialBoardState: room.game.initialBoardState,
-    });
+    if (winnerColor) {
+      io.to(room.roomCode).emit("gameOver", {
+        winner: winnerColor,
+        reason: `Torneio: ${reason} Vencedor avança!`,
+        isTournament: true,
+        moveHistory: room.game.moveHistory,
+        initialBoardState: room.game.initialBoardState,
+      });
+    }
 
-    if (tournamentManager && winnerEmail) {
+    if (tournamentManager) {
       await tournamentManager.handleTournamentGameEnd(
         winnerEmail,
         loserEmail,

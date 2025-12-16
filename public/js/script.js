@@ -325,18 +325,7 @@ document.addEventListener("DOMContentLoaded", () => {
             "Vitória! Aguarde o fim da rodada para o próximo oponente.";
           msg.classList.remove("hidden");
         } else {
-          document.getElementById("loser-screen").classList.remove("hidden");
-          document.querySelector("#loser-screen .revanche-btn").style.display =
-            "none";
-          setTimeout(() => {
-            if (
-              !document
-                .getElementById("loser-screen")
-                .classList.contains("hidden")
-            ) {
-              GameCore.returnToLobbyLogic();
-            }
-          }, 5000);
+          GameCore.returnToLobbyLogic();
         }
       } else {
         if (data.winner === GameCore.state.myColor)
@@ -520,7 +509,17 @@ document.addEventListener("DOMContentLoaded", () => {
         .classList.remove("hidden");
       document.getElementById("winner-screen").classList.add("hidden");
       document.getElementById("loser-screen").classList.add("hidden");
+      document.getElementById("game-over-overlay").classList.add("hidden");
+      document.getElementById("draw-screen").classList.add("hidden");
     }
+  });
+
+  socket.on("tournamentSpectateOpponent", (data) => {
+    document.getElementById("winner-screen").classList.add("hidden");
+    document.getElementById("game-over-overlay").classList.add("hidden");
+    socket.emit("joinAsSpectator", { roomCode: data.roomCode });
+    UI.elements.gameStatus.innerHTML =
+      "<span style='color:#f1c40f'>Assistindo provável oponente...</span>";
   });
 
   // Helper local para mostrar bracket (se necessário)

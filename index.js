@@ -535,12 +535,12 @@ app.get("/api/admin/openings", adminAuthHeader, (req, res) => {
 
 // Inicialização
 initializeManager(io, gameRooms);
-tournamentManager.initializeTournamentManager(io);
+// UPDATE: Passa gameRooms para o tournamentManager
+tournamentManager.initializeTournamentManager(io, gameRooms);
 setTournamentManager(tournamentManager);
 initializeSocket(io);
 
 // --- ROTINA DE LIMPEZA AUTOMÁTICA DE HISTÓRICO ---
-// Executa a cada 1 hora para limpar partidas com mais de 24 horas
 const CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 Hora em milissegundos
 const HISTORY_RETENTION = 24 * 60 * 60 * 1000; // 24 Horas em milissegundos
 
@@ -548,7 +548,6 @@ setInterval(async () => {
   try {
     const cutoffDate = new Date(Date.now() - HISTORY_RETENTION);
 
-    // Deleta partidas cujo 'createdAt' seja anterior à data limite (24h atrás)
     const result = await MatchHistory.deleteMany({
       createdAt: { $lt: cutoffDate },
     });

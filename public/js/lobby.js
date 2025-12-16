@@ -56,7 +56,7 @@ window.initLobby = function (socket, UI) {
       }
 
       if (diff < 0) {
-        // Estamos no horário (21:00 - 21:10)
+        // Estamos no horário (23:59 - ...)
         if (timerDisplay) {
           timerDisplay.textContent = "INICIANDO...";
           timerDisplay.style.color = "#e74c3c"; // Vermelho
@@ -308,7 +308,7 @@ window.initLobby = function (socket, UI) {
         info.id = "trn-info-display";
         info.style.cssText =
           "text-align: center; margin-bottom: 10px; color: #f1c40f; font-weight: bold;";
-        info.innerHTML = `<i class="fa-regular fa-clock"></i> Início às 21:00 BRT`;
+        info.innerHTML = `<i class="fa-regular fa-clock"></i> Início às 23:59 BRT`;
         body.insertBefore(info, body.firstChild);
       }
 
@@ -469,6 +469,9 @@ window.initLobby = function (socket, UI) {
   });
   // Adicionado listener para desempate do torneio
   socket.on("tournamentTieBreak", (d) => {
+    if (d.winner === null) {
+      return;
+    }
     if (d.winner === window.currentUser?.email) {
       alert(`🎉 PARABÉNS!\n\n${d.reason}`);
     } else {
@@ -622,7 +625,7 @@ window.initLobby = function (socket, UI) {
             <span id="close-tournament-info-btn" style="position:absolute; top:10px; right:20px; font-size:2rem; cursor:pointer; color:#fff;">&times;</span>
             <h2 style="color:#f1c40f; margin-bottom:15px; text-align:center;">Regras do Torneio</h2>
             <div style="text-align:left; line-height:1.6; color:#ddd; padding:0 10px;">
-                <p><strong>🕒 Início:</strong> 21:00 BRT</p>
+                <p><strong>🕒 Início:</strong> 23:59 BRT</p>
                 <p><strong>💰 Entrada:</strong> R$ 2,00</p>
                 <p><strong>🏆 Premiação:</strong> 100% distribuído (Sem taxas!)</p>
                 <ul style="margin-left:20px; margin-bottom:10px;">

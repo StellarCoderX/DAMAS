@@ -777,10 +777,12 @@ function initializeSocket(ioInstance) {
       const player = room.players.find((p) => p.user.email === user.email);
       if (player) {
         player.socketId = socket.id;
-        if (room.game.users.white === user.email) {
-          room.game.players.white = socket.id;
-        } else if (room.game.users.black === user.email) {
-          room.game.players.black = socket.id;
+        if (room.game && room.game.users) {
+          if (room.game.users.white === user.email) {
+            room.game.players.white = socket.id;
+          } else if (room.game.users.black === user.email) {
+            room.game.players.black = socket.id;
+          }
         }
         socket.join(roomCode);
 
@@ -791,20 +793,22 @@ function initializeSocket(ioInstance) {
           timeData = { timeLeft: room.timeLeft };
         }
 
-        io.to(roomCode).emit("gameResumed", {
-          gameState: room.game,
-          ...timeData,
-        });
-
-        // Só reinicia o timer se o jogo não estiver concluído
-        if (!room.isGameConcluded) {
-          startTimer(roomCode);
-
-          // Força atualização imediata do timer para o usuário que reconectou
-          socket.emit("timerUpdate", {
+        if (room.game) {
+          io.to(roomCode).emit("gameResumed", {
+            gameState: room.game,
             ...timeData,
-            roomCode,
           });
+
+          // Só reinicia o timer se o jogo não estiver concluído
+          if (!room.isGameConcluded) {
+            startTimer(roomCode);
+
+            // Força atualização imediata do timer para o usuário que reconectou
+            socket.emit("timerUpdate", {
+              ...timeData,
+              roomCode,
+            });
+          }
         }
       }
     });
