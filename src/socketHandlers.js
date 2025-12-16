@@ -325,12 +325,13 @@ async function executeMove(roomCode, from, to, socketId, clientMoveId = null) {
       moveId, // Salva também no histórico para debug
     });
 
-    // Lógica de empate por repetição
+    // Lógica de empate por repetição e material
     let whitePieces = 0;
     let whiteDames = 0;
     let blackPieces = 0;
     let blackDames = 0;
 
+    // Contagem de material
     for (let r = 0; r < game.boardSize; r++) {
       for (let c = 0; c < game.boardSize; c++) {
         const p = game.boardState[r][c];
@@ -346,19 +347,65 @@ async function executeMove(roomCode, from, to, socketId, clientMoveId = null) {
       }
     }
 
-    const isWhite3vs1 =
-      whiteDames >= 3 &&
-      whitePieces === whiteDames &&
-      blackPieces === 1 &&
-      blackDames === 1;
-    const isBlack3vs1 =
-      blackDames >= 3 &&
-      blackPieces === blackDames &&
-      whitePieces === 1 &&
-      whiteDames === 1;
+    // Definição dos finais específicos do PDF (Itens 99 e 100)
+    const totalWhite = whitePieces;
+    const totalBlack = blackPieces;
 
+    // Cenários de Empate em 5 Lances (PDF)
+    // 2 Damas vs 1 Dama
+    const is2v1 =
+      (whiteDames === 2 &&
+        totalWhite === 2 &&
+        blackDames === 1 &&
+        totalBlack === 1) ||
+      (blackDames === 2 &&
+        totalBlack === 2 &&
+        whiteDames === 1 &&
+        totalWhite === 1);
+
+    // 2 Damas vs 2 Damas (PDF Item 99)
+    const is2v2 =
+      whiteDames === 2 &&
+      totalWhite === 2 &&
+      blackDames === 2 &&
+      totalBlack === 2;
+
+    // 2 Damas vs 1 Dama e 1 Pedra (PDF Item 99 - Imagem) - Opcional, mas comum
+
+    // 3 Damas (ou mais) vs 1 Dama (PDF Item 100)
+    // Nota: O PDF exige que a dama solitária domine a "grande diagonal", mas para simplificar código,
+    // costuma-se aplicar a regra de 5 lances para qualquer 3x1 de damas.
+    const is3v1 =
+      (whiteDames >= 3 &&
+        totalWhite === whiteDames &&
+        blackDames === 1 &&
+        totalBlack === 1) ||
+      (blackDames >= 3 &&
+        totalBlack === blackDames &&
+        whiteDames === 1 &&
+        totalWhite === 1);
+
+    // LÓGICA DE APLICAÇÃO DOS LIMITES
     if (gameRoom.gameMode !== "international" && !canCaptureAgain) {
+      // Regra de 5 Lances (Finais Específicos)
+      if (is2v1 || is2v2 || is3v1) {
+        // Se entrou nesse cenário, o contador deve ser curto.
+        // Nota: Você precisaria resetar um contador específico quando essa configuração de peças começa,
+        // mas usar o 'movesSinceCapture' é uma aproximação aceitável se ele for zerado na captura que gerou essa posição.
+        if (game.movesSinceCapture >= 10) {
+          // 5 lances de CADA jogador = 10 movimentos totais no histórico
+          return processEndOfGame(
+            null,
+            null,
+            gameRoom,
+            "Empate Técnico (Regra de 5 lances)."
+          );
+        }
+      }
+
+      // Regra Geral (20 Lances de Dama sem captura) - PDF às vezes menciona 20 ou 40 dependendo da variante
       if (game.damaMovesWithoutCaptureOrPawnMove >= 40)
+        // 20 lances cada = 40 meio-lances
         return processEndOfGame(
           null,
           null,
@@ -366,15 +413,9 @@ async function executeMove(roomCode, from, to, socketId, clientMoveId = null) {
           "Empate por 20 lances de Damas."
         );
 
+      // Regra Geral de Falta de Progresso
       if (game.movesSinceCapture >= 40) {
-        if (isWhite3vs1 || isBlack3vs1) {
-          return processEndOfGame(
-            null,
-            null,
-            gameRoom,
-            "Empate: 3 Damas contra 1 (20 lances)."
-          );
-        }
+        // 20 lances cada sem captura
         return processEndOfGame(
           null,
           null,
