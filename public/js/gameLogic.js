@@ -508,18 +508,28 @@
     return null;
   }
 
-  function shouldResetDrawCounter(board, from, isCapture) {
+  // --- REGRA DAS 20 JOGADAS (PARTIDA PARADA) ---
+  function getNextDrawCounter(currentCounter, board, from, to, isCapture) {
     const piece = board[from.row][from.col];
-    if (!piece) return false;
+    // Se não houver peça na origem (por segurança), mantém o contador
+    if (!piece) return currentCounter || 0;
 
-    // 1. Captura de peça (simples ou dama) reseta a contagem
-    if (isCapture) return true;
-
-    // 2. Movimento de peça simples (não-dama) reseta a contagem
     const isKing = piece === "B" || piece === "P";
-    if (!isKing) return true;
 
-    return false;
+    // A contagem é zerada se:
+    // 1. Houver captura (de peça simples ou dama).
+    // 2. Uma peça simples (não-dama) for movida.
+    if (isCapture || !isKing) {
+      return 0;
+    }
+
+    // Incrementa apenas se for movimento de Dama SEM captura
+    return (currentCounter || 0) + 1;
+  }
+
+  function checkDrawByMoves(drawCounter) {
+    // 20 jogadas (10 de cada lado) sem progresso
+    return drawCounter >= 20;
   }
 
   exports.findBestCaptureMoves = findBestCaptureMoves;
@@ -528,5 +538,6 @@
   exports.getAllPossibleCapturesForPiece = getAllPossibleCapturesForPiece;
   exports.hasValidMoves = hasValidMoves;
   exports.getUniqueCaptureMove = getUniqueCaptureMove;
-  exports.shouldResetDrawCounter = shouldResetDrawCounter;
+  exports.getNextDrawCounter = getNextDrawCounter;
+  exports.checkDrawByMoves = checkDrawByMoves;
 })(typeof exports === "undefined" ? (this.gameLogic = {}) : exports);
