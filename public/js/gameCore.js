@@ -42,6 +42,7 @@ window.GameCore = (function () {
     drawMovesCounter: 0,
     lastMoveWasProgress: false,
     revancheInterval: null,
+    isProcessingRevanche: false,
   };
 
   // --- TIMER LOCAL (BÁSICO) ---
@@ -100,6 +101,61 @@ window.GameCore = (function () {
   function init(socketInstance, uiInstance) {
     state.socket = socketInstance;
     state.UI = uiInstance;
+    
+    // --- NOVO: Handler para revanche aceita ---
+    state.socket.on("rematchAccepted", (data) => {
+      const { newRoomCode } = data;
+      
+      console.log(`[Revanche] Nova sala recebida: ${newRoomCode}`);
+      
+      // Atualiza o estado local
+      state.currentRoom = newRoomCode;
+      
+      // Atualiza no localStorage
+      localStorage.setItem("checkersCurrentRoom", newRoomCode);
+      
+      // Limpa estado do jogo anterior
+      state.boardState = [];
+      state.selectedPiece = null;
+      state.isGameOver = false;
+      state.isReplaying = false;
+      state.savedReplayData = null;
+      state.currentTurnCapturedPieces = [];
+      state.lastOptimisticMove = null;
+      state.pendingBoardSnapshot = null;
+      state.drawMovesCounter = 0;
+      state.isProcessingRevanche = false;
+      
+      // Cancela timeout de revanche se existir
+      cancelRevancheTimeout();
+      
+      // Força limpeza de highlights
+      if (state.UI.clearHighlights) {
+        state.UI.clearHighlights();
+      }
+      
+      // Mostra mensagem de carregamento
+      if (state.UI.showMessage) {
+        state.UI.showMessage(`Revanche iniciada! Nova sala: ${newRoomCode}`, "info", 2000);
+      }
+      
+      // Atualiza display da sala se a função existir
+      if (state.UI.updateRoomCodeDisplay) {
+        state.UI.updateRoomCodeDisplay(newRoomCode);
+      }
+    });
+    
+    // Listener para limpeza de revanche
+    state.socket.on("revancheDeclined", (data) => {
+      state.isProcessingRevanche = false;
+      cancelRevancheTimeout();
+      
+      if (data && data.message) {
+        if (state.UI.showMessage) {
+          state.UI.showMessage(data.message, "error", 3000);
+        }
+      }
+    });
   }
 
   // --- WATCHDOG (Sincronização) ---
@@ -376,7 +432,7 @@ window.GameCore = (function () {
   function handleBoardClick(e) {
     if (window.isSpectator || state.isReplaying) return;
     if (!state.myColor) return;
-    if (state.isProcessingQueue) return;
+    if (state.isProcessingQueue || state.isProcessingRevanche) return;
 
     const square = e.target.closest(".square");
     if (!square) return;
@@ -484,29 +540,59 @@ window.GameCore = (function () {
   // --- REVANCHE ---
   function handleRevancheRequest() {
     if (!state.currentRoom || window.isSpectator) return;
+    if (state.isProcessingRevanche) {
+      console.log("[Revanche] Já existe uma requisição em andamento");
+      return;
+    }
 
+    state.isProcessingRevanche = true;
     state.socket.emit("requestRevanche", {
       roomCode: state.currentRoom,
     });
 
+    console.log(`[Revanche] Requisição enviada para sala ${state.currentRoom}`);
+
+    // Desabilita botões durante a espera
     document
       .querySelectorAll(".revanche-btn, .exit-lobby-btn, .replay-btn")
-      .forEach((btn) => (btn.disabled = true));
+      .forEach((btn) => {
+        if (btn) btn.disabled = true;
+      });
 
     let seconds = 5;
     const updateStatus = () => {
       document.querySelectorAll(".revanche-status").forEach((el) => {
-        el.textContent = `Aguardando... (${seconds}s)`;
+        if (el) el.textContent = `Aguardando... (${seconds}s)`;
       });
     };
     updateStatus();
 
+    // Cancela qualquer intervalo anterior
     if (state.revancheInterval) clearInterval(state.revancheInterval);
+    
     state.revancheInterval = setInterval(() => {
       seconds--;
       if (seconds <= 0) {
         clearInterval(state.revancheInterval);
         state.revancheInterval = null;
+        state.isProcessingRevanche = false;
+        
+        // Reabilita botões
+        document
+          .querySelectorAll(".revanche-btn, .exit-lobby-btn, .replay-btn")
+          .forEach((btn) => {
+            if (btn) btn.disabled = false;
+          });
+          
+        // Limpa status
+        document.querySelectorAll(".revanche-status").forEach((el) => {
+          if (el) el.textContent = "";
+        });
+        
+        // Garante que o servidor saiba que saímos, evitando início tardio
+        state.socket.emit("leaveEndGameScreen", {
+          roomCode: state.currentRoom,
+        });
         returnToLobbyLogic();
       } else {
         updateStatus();
@@ -519,6 +605,19 @@ window.GameCore = (function () {
       clearInterval(state.revancheInterval);
       state.revancheInterval = null;
     }
+    state.isProcessingRevanche = false;
+    
+    // Reabilita botões
+    document
+      .querySelectorAll(".revanche-btn, .exit-lobby-btn, .replay-btn")
+      .forEach((btn) => {
+        if (btn) btn.disabled = false;
+      });
+      
+    // Limpa status
+    document.querySelectorAll(".revanche-status").forEach((el) => {
+      if (el) el.textContent = "";
+    });
   }
 
   // --- RETORNO AO LOBBY ---
@@ -526,11 +625,12 @@ window.GameCore = (function () {
     state.isGameOver = false;
     window.isSpectator = false;
     state.isReplaying = false;
+    state.isProcessingRevanche = false;
     state.savedReplayData = null;
     stopWatchdog();
     if (state.drawCooldownInterval) clearInterval(state.drawCooldownInterval);
     if (state.nextGameInterval) clearInterval(state.nextGameInterval);
-    if (state.revancheInterval) clearInterval(state.revancheInterval);
+    cancelRevancheTimeout();
 
     state.currentRoom = null;
     state.myColor = null;
@@ -544,6 +644,12 @@ window.GameCore = (function () {
     state.drawMovesCounter = 0;
 
     localStorage.removeItem("checkersCurrentRoom");
+
+    // Remove listeners específicos da revanche
+    if (state.socket) {
+      state.socket.off("rematchAccepted");
+      state.socket.off("revancheDeclined");
+    }
 
     state.UI.returnToLobbyScreen();
     document.getElementById("tournament-indicator").classList.add("hidden");

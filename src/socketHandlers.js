@@ -27,8 +27,6 @@ const {
 
 const gameRooms = {};
 let io; // Variável global para instância do Socket.IO
-// Contador simples para razões de desconexão (diagnóstico)
-const disconnectReasonCounts = {};
 
 function getLobbyInfo() {
   const waitingRooms = Object.values(gameRooms)
@@ -696,13 +694,14 @@ function initializeSocket(ioInstance) {
           // AND immediately remove the room and force requester(s) back to lobby.
           if (room.revancheRequests && room.revancheRequests.size > 0) {
             try {
-              for (const reqId of Array.from(room.revancheRequests)) {
-                if (reqId) {
-                  io.to(reqId).emit("revancheDeclined", {
+              for (const email of Array.from(room.revancheRequests)) {
+                const p = room.players.find((pl) => pl.user.email === email);
+                if (p && p.socketId) {
+                  io.to(p.socketId).emit("revancheDeclined", {
                     message:
                       "Seu oponente optou por assistir a partida em vez de aceitar a revanche.",
                   });
-                  io.to(reqId).emit("forceReturnToLobby");
+                  io.to(p.socketId).emit("forceReturnToLobby");
                 }
               }
             } catch (innerErr) {
@@ -1229,8 +1228,6 @@ function initializeSocket(ioInstance) {
           delete gameRooms[roomCode];
           io.emit("updateLobby", getLobbyInfo());
         }
-      } else if (room && room.isGameConcluded) {
-        socket.emit("leaveEndGameScreen", { roomCode });
       }
     });
 
@@ -1323,27 +1320,57 @@ function initializeSocket(ioInstance) {
         console.error("Error handling acceptDraw:", e);
       }
     });
+    
     socket.on("requestRevanche", async ({ roomCode }) => {
+      console.log(`[Revanche] Requisição recebida para sala ${roomCode} do socket ${socket.id}`);
+      
       const room = gameRooms[roomCode];
-      if (!room || !room.isGameConcluded) return;
-      const isPlayer = room.players.some((p) => p.socketId === socket.id);
-      if (!isPlayer) return;
+      if (!room || !room.isGameConcluded) {
+        console.log(`[Revanche] Sala ${roomCode} não encontrada ou jogo não concluído`);
+        return socket.emit("revancheDeclined", {
+          message: "Sala não encontrada ou jogo ainda em andamento."
+        });
+      }
+
+      const player = room.players.find((p) => p.socketId === socket.id);
+      if (!player) {
+        console.log(`[Revanche] Jogador não encontrado na sala ${roomCode}`);
+        return socket.emit("revancheDeclined", {
+          message: "Você não é um jogador nesta sala."
+        });
+      }
+
+      console.log(`[Revanche] Jogador ${player.user.email} solicitou revanche`);
 
       if (!room.revancheRequests) room.revancheRequests = new Set();
-      room.revancheRequests.add(socket.id);
-      if (room.players.length === 2 && room.revancheRequests.size === 2) {
-        const player1SocketId = room.players[0].socketId;
-        const player2SocketId = room.players[1].socketId;
-        if (
-          room.revancheRequests.has(player1SocketId) &&
-          room.revancheRequests.has(player2SocketId)
-        ) {
+      // Usa Email em vez de Socket ID para persistência entre reconexões
+      room.revancheRequests.add(player.user.email);
+
+      // Notifica o outro jogador que uma revanche foi solicitada
+      const otherPlayer = room.players.find((p) => p.socketId !== socket.id);
+      if (otherPlayer) {
+        io.to(otherPlayer.socketId).emit("revancheRequested", {
+          from: player.user.username || player.user.email
+        });
+      }
+
+      // Verifica se ambos aceitaram
+      if (room.players.length === 2) {
+        const p1Email = room.players[0].user.email;
+        const p2Email = room.players[1].user.email;
+        
+        console.log(`[Revanche] Verificando aceitação: ${p1Email} = ${room.revancheRequests.has(p1Email)}, ${p2Email} = ${room.revancheRequests.has(p2Email)}`);
+        
+        if (room.revancheRequests.has(p1Email) && room.revancheRequests.has(p2Email)) {
+          console.log(`[Revanche] Ambos aceitaram! Processando revanche para sala ${roomCode}`);
+          
           try {
             const player1 = room.players[0];
             const player2 = room.players[1];
             const bet = room.bet;
 
-            // Cobrança Atômica P1
+            // 1. Cobrança Atômica P1
+            console.log(`[Revanche] Cobrando aposta de ${player1.user.email}`);
             const p1Update = await User.findOneAndUpdate(
               { email: player1.user.email, saldo: { $gte: bet } },
               [
@@ -1355,14 +1382,16 @@ function initializeSocket(ioInstance) {
             );
 
             if (!p1Update) {
+              console.log(`[Revanche] Falha na cobrança de ${player1.user.email}`);
               io.to(room.roomCode).emit("revancheDeclined", {
-                message: "Jogador 1 sem saldo suficiente.",
+                message: `${player1.user.email} sem saldo suficiente.`,
               });
-              delete gameRooms[room.roomCode];
+              room.revancheRequests.delete(p1Email);
               return;
             }
 
-            // Cobrança Atômica P2
+            // 2. Cobrança Atômica P2
+            console.log(`[Revanche] Cobrando aposta de ${player2.user.email}`);
             const p2Update = await User.findOneAndUpdate(
               { email: player2.user.email, saldo: { $gte: bet } },
               [
@@ -1375,50 +1404,155 @@ function initializeSocket(ioInstance) {
 
             if (!p2Update) {
               // Reembolsa P1
+              console.log(`[Revanche] Falha na cobrança de ${player2.user.email}, reembolsando P1`);
               await User.findOneAndUpdate({ email: player1.user.email }, [
                 { $set: { saldo: { $round: [{ $add: ["$saldo", bet] }, 2] } } },
               ]);
               io.to(room.roomCode).emit("revancheDeclined", {
-                message: "Jogador 2 sem saldo suficiente.",
+                message: `${player2.user.email} sem saldo suficiente.`,
               });
-              delete gameRooms[room.roomCode];
+              room.revancheRequests.delete(p2Email);
               return;
             }
 
-            // FIX: Reset match state for Tablita to force new opening on rematch
-            if (room.gameMode === "tablita") {
-              room.match = null;
-            }
+            console.log(`[Revanche] Apostas processadas com sucesso`);
 
-            await startGameLogic(room);
-          } catch (err) {
-            console.error(err);
-            io.to(room.roomCode).emit("revancheDeclined", {
-              message: "Erro ao processar a aposta da revanche.",
+            // --- CORREÇÃO CRÍTICA: Gera NOVA sala para revanche ---
+            const newRoomCode = `REV-${Date.now().toString(36).slice(-4)}-${Math.random()
+              .toString(36)
+              .substring(2, 4)
+              .toUpperCase()}`;
+
+            console.log(`[Revanche] Criando nova sala ${newRoomCode} para revanche`);
+
+            // Cria nova sala com configurações atualizadas
+            const newRoom = {
+              ...room,
+              roomCode: newRoomCode,
+              players: room.players.map(p => ({ 
+                socketId: p.socketId,
+                user: { ...p.user }
+              })),
+              game: null,
+              isGameConcluded: false,
+              revancheRequests: new Set(),
+              timerInterval: null,
+              disconnectTimeout: null,
+              cleanupTimeout: null,
+              firstMoveTimeout: null,
+              spectators: new Set(),
+              drawOfferBy: null,
+              // Se for Tablita, reseta completamente o match
+              match: room.gameMode === "tablita" ? null : undefined,
+              lastOpeningIndex: -1, // Reseta para nova abertura
+            };
+
+            gameRooms[newRoomCode] = newRoom;
+
+            // --- CORREÇÃO CRÍTICA: Move TODOS os sockets para a nova sala ---
+            console.log(`[Revanche] Movendo jogadores para nova sala ${newRoomCode}`);
+            
+            room.players.forEach(player => {
+              const playerSocket = io.sockets.sockets.get(player.socketId);
+              if (playerSocket) {
+                // Remove da sala antiga
+                playerSocket.leave(room.roomCode);
+                // Entra na nova sala
+                playerSocket.join(newRoomCode);
+                console.log(`[Revanche] Socket ${playerSocket.id} movido para ${newRoomCode}`);
+                
+                // Atualiza socketId na nova sala
+                const playerInNewRoom = newRoom.players.find(p => p.user.email === player.user.email);
+                if (playerInNewRoom) {
+                  playerInNewRoom.socketId = playerSocket.id;
+                }
+              }
             });
+
+            // Notifica CADA jogador individualmente sobre a nova sala
+            console.log(`[Revanche] Notificando jogadores sobre nova sala`);
+            room.players.forEach(player => {
+              const playerSocket = io.sockets.sockets.get(player.socketId);
+              if (playerSocket) {
+                playerSocket.emit("rematchAccepted", { 
+                  newRoomCode,
+                  message: "Revanche iniciada!" 
+                });
+                console.log(`[Revanche] Notificado ${player.user.email} sobre nova sala ${newRoomCode}`);
+              }
+            });
+
+            // Inicia o jogo na NOVA sala
+            console.log(`[Revanche] Iniciando jogo na nova sala ${newRoomCode}`);
+            await startGameLogic(newRoom);
+
+            // --- LIMPEZA SEGURA da sala antiga ---
+            console.log(`[Revanche] Limpando sala antiga ${room.roomCode}`);
+            // Cancela todos os timeouts da sala antiga
+            if (room.timerInterval) clearInterval(room.timerInterval);
+            if (room.disconnectTimeout) clearTimeout(room.disconnectTimeout);
+            if (room.cleanupTimeout) clearTimeout(room.cleanupTimeout);
+            if (room.firstMoveTimeout) clearTimeout(room.firstMoveTimeout);
+            
+            // Remove a sala antiga
             delete gameRooms[room.roomCode];
+            
+            // Atualiza lobby
+            io.emit("updateLobby", getLobbyInfo());
+            
+            console.log(`[Revanche] Revanche concluída com sucesso! Nova sala: ${newRoomCode}`);
+
+          } catch (err) {
+            console.error("[Revanche] Erro ao processar revanche:", err);
+            io.to(room.roomCode).emit("revancheDeclined", {
+              message: "Erro ao processar a revanche. Tente novamente.",
+            });
+            // Limpa a sala em caso de erro
+            if (gameRooms[room.roomCode]) {
+              delete gameRooms[room.roomCode];
+            }
           }
+        } else {
+          console.log(`[Revanche] Aguardando aceitação do outro jogador`);
+          // Ainda não temos ambos os jogadores
+          socket.emit("revancheRequestSent");
         }
       }
     });
+    
     socket.on("leaveEndGameScreen", ({ roomCode }) => {
       const room = gameRooms[roomCode];
-      if (!room) return;
+      // Proteção CRÍTICA: Só processa saída se o jogo REALMENTE estiver concluído.
+      // Isso evita que o timeout de 5s da revanche mate um jogo que acabou de começar.
+      if (!room || !room.isGameConcluded) {
+        console.log(`[LeaveEndGame] Sala ${roomCode} não concluída, ignorando saída`);
+        return;
+      }
 
       const playerWhoLeft = room.players.find((p) => p.socketId === socket.id);
       if (playerWhoLeft) {
+        console.log(`[LeaveEndGame] Jogador ${playerWhoLeft.user.email} saindo da sala ${roomCode}`);
+        
+        // Remove solicitação de revanche deste jogador
+        if (room.revancheRequests) {
+          room.revancheRequests.delete(playerWhoLeft.user.email);
+        }
+        
         room.players = room.players.filter((p) => p.socketId !== socket.id);
         if (room.players.length === 1) {
           const opponent = room.players[0];
           if (opponent) {
+            console.log(`[LeaveEndGame] Notificando oponente ${opponent.user.email} sobre saída`);
             io.to(opponent.socketId).emit("revancheDeclined", {
               message: "O seu oponente saiu.",
             });
           }
         }
         if (room.players.length === 0) {
+          console.log(`[LeaveEndGame] Sala ${roomCode} vazia, removendo`);
           if (room.cleanupTimeout) clearTimeout(room.cleanupTimeout);
           delete gameRooms[roomCode];
+          io.emit("updateLobby", getLobbyInfo());
         }
       } else {
         // If non-player leaving (likely spectator), remove from spectators set
