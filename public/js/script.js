@@ -5,6 +5,7 @@ document.addEventListener("DOMContentLoaded", () => {
   UI.init();
 
   const socket = io({ autoConnect: false });
+  const isGamePage = window.location.pathname.includes("jogo.html");
 
   // Inicializa Módulos Globais (Lobby e Auth)
   if (window.initLobby) window.initLobby(socket, UI);
@@ -17,11 +18,40 @@ document.addEventListener("DOMContentLoaded", () => {
   window.currentUser = null;
   window.isSpectator = false;
 
+  // --- RESTAURAÇÃO DE SESSÃO (Apenas na página de jogo) ---
+  if (isGamePage) {
+    const savedEmail = localStorage.getItem("checkersUserEmail");
+    if (savedEmail) {
+      fetch("/api/user/re-authenticate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: savedEmail }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.user) {
+            window.currentUser = data.user;
+            socket.connect(); // Conecta apenas após recuperar o usuário
+          } else {
+            window.location.href = "/"; // Falha na auth
+          }
+        })
+        .catch(() => (window.location.href = "/"));
+    } else {
+      window.location.href = "/"; // Sem usuário salvo
+    }
+  }
+
   // =================================================================
   // EVENTOS DO DOM (BOTEIRA E CLICKS)
   // =================================================================
 
-  document.getElementById("resign-btn").addEventListener("click", () => {
+  const safeAddListener = (id, event, fn) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener(event, fn);
+  };
+
+  safeAddListener("resign-btn", "click", () => {
     if (
       GameCore.state.currentRoom &&
       !window.isSpectator &&
@@ -30,37 +60,35 @@ document.addEventListener("DOMContentLoaded", () => {
       socket.emit("playerResign");
   });
 
-  document.getElementById("draw-btn").addEventListener("click", () => {
+  safeAddListener("draw-btn", "click", () => {
     if (GameCore.state.currentRoom && !window.isSpectator) {
       document.getElementById("draw-btn").disabled = true;
       socket.emit("requestDraw", { roomCode: GameCore.state.currentRoom });
     }
   });
 
-  document
-    .getElementById("spectator-leave-btn")
-    .addEventListener("click", () => {
-      if (GameCore.state.isReplaying) {
-        GameCore.state.isReplaying = false;
-        document.getElementById("game-over-overlay").classList.remove("hidden");
-        UI.elements.spectatorIndicator.classList.add("hidden");
-        UI.elements.spectatorLeaveBtn.classList.add("hidden");
-        return;
-      }
-      socket.emit("leaveEndGameScreen", {
-        roomCode: GameCore.state.currentRoom,
-      });
-      GameCore.returnToLobbyLogic();
+  safeAddListener("spectator-leave-btn", "click", () => {
+    if (GameCore.state.isReplaying) {
+      GameCore.state.isReplaying = false;
+      document.getElementById("game-over-overlay").classList.remove("hidden");
+      UI.elements.spectatorIndicator.classList.add("hidden");
+      UI.elements.spectatorLeaveBtn.classList.add("hidden");
+      return;
+    }
+    socket.emit("leaveEndGameScreen", {
+      roomCode: GameCore.state.currentRoom,
     });
+    GameCore.returnToLobbyLogic();
+  });
 
-  document.getElementById("accept-draw-btn").addEventListener("click", () => {
+  safeAddListener("accept-draw-btn", "click", () => {
     if (GameCore.state.currentRoom) {
       socket.emit("acceptDraw", { roomCode: GameCore.state.currentRoom });
       document.getElementById("draw-request-overlay").classList.add("hidden");
     }
   });
 
-  document.getElementById("decline-draw-btn").addEventListener("click", () => {
+  safeAddListener("decline-draw-btn", "click", () => {
     if (GameCore.state.currentRoom) {
       socket.emit("declineDraw", { roomCode: GameCore.state.currentRoom });
       document.getElementById("draw-request-overlay").classList.add("hidden");
@@ -111,12 +139,23 @@ document.addEventListener("DOMContentLoaded", () => {
         roomCode: GameCore.state.currentRoom,
         user: window.currentUser,
       });
-      UI.elements.lobbyContainer.classList.add("hidden");
-      UI.elements.gameContainer.classList.remove("hidden");
+
+      // Se estiver no lobby e reconectar em um jogo, redireciona
+      if (!isGamePage) {
+        window.location.href = "/jogo.html";
+      } else {
+        UI.elements.gameContainer.classList.remove("hidden");
+      }
     }
   });
 
   socket.on("gameStart", (gameState) => {
+    if (!isGamePage) {
+      localStorage.setItem("checkersCurrentRoom", gameState.roomCode);
+      window.location.href = "/jogo.html";
+      return;
+    }
+
     if (
       window.currentUser &&
       gameState.users &&
@@ -224,6 +263,12 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   socket.on("spectatorJoined", (data) => {
+    if (!isGamePage) {
+      localStorage.setItem("checkersCurrentRoom", data.gameState.roomCode);
+      window.location.href = "/jogo.html";
+      return;
+    }
+
     window.isSpectator = true;
     GameCore.state.currentRoom = data.gameState.roomCode;
     GameCore.state.currentBoardSize = data.gameState.boardSize;
@@ -256,6 +301,11 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   socket.on("gameResumed", (data) => {
+    if (!isGamePage) {
+      window.location.href = "/jogo.html";
+      return;
+    }
+
     GameCore.state.lastPacketTime = Date.now();
     if (window.isSpectator) return;
     document.getElementById("connection-lost-overlay").classList.add("hidden");
@@ -495,6 +545,12 @@ document.addEventListener("DOMContentLoaded", () => {
       data.player1 === window.currentUser.email ||
       data.player2 === window.currentUser.email
     ) {
+      localStorage.setItem("checkersCurrentRoom", data.roomCode);
+      if (!isGamePage) {
+        window.location.href = "/jogo.html";
+        return;
+      }
+
       socket.emit("rejoinActiveGame", {
         roomCode: data.roomCode,
         user: window.currentUser,
@@ -502,7 +558,6 @@ document.addEventListener("DOMContentLoaded", () => {
       document
         .getElementById("tournament-bracket-overlay")
         .classList.add("hidden");
-      UI.elements.lobbyContainer.classList.add("hidden");
       UI.elements.gameContainer.classList.remove("hidden");
       document
         .getElementById("tournament-indicator")
@@ -515,6 +570,11 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   socket.on("tournamentSpectateOpponent", (data) => {
+    if (!isGamePage) {
+      localStorage.setItem("checkersCurrentRoom", data.roomCode);
+      window.location.href = "/jogo.html";
+      return;
+    }
     document.getElementById("winner-screen").classList.add("hidden");
     document.getElementById("game-over-overlay").classList.add("hidden");
     socket.emit("joinAsSpectator", { roomCode: data.roomCode });

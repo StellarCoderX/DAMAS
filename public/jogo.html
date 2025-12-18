@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Damas Arena - Partida</title>
+
+    <!-- Fontes -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap"
+        rel="stylesheet" />
+
+    <!-- Ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Estilos -->
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/game.css" />
+    <link rel="stylesheet" href="css/tournament.css" />
+    <link rel="stylesheet" href="css/board-visuals.css" />
+
+    <!-- SDKs -->
+    <script src="https://sdk.mercadopago.com/js/v2"></script>
+    <script src="/socket.io/socket.io.js"></script>
+
+    <style>
+        /* --- CONTAINER PRINCIPAL OTIMIZADO --- */
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 95vw;
+            /* Usa 95% da largura da tela */
+            min-width: 300px;
+            /* Largura mínima para não quebrar */
+            margin: 0 auto;
+            padding: 10px;
+            box-sizing: border-box;
+            background: linear-gradient(to bottom, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.9));
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Ajustes para telas maiores */
+        @media (min-width: 768px) {
+            #game-container {
+                max-width: 700px;
+                /* Largura máxima confortável para tablets/desktops */
+                padding: 20px;
+                margin-top: 10px;
+            }
+        }
+
+        /* Ajustes para telas muito pequenas */
+        @media (max-width: 360px) {
+            #game-container {
+                padding: 8px;
+                max-width: 98vw;
+                /* Usa quase toda a tela */
+            }
+        }
+
+        /* --- ELEMENTOS INTERNOS --- */
+        .game-top-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+            width: 100%;
+            justify-content: center;
+            flex-wrap: wrap;
+            /* Permite quebra em telas muito pequenas */
+        }
+
+        #players-hud {
+            width: 100%;
+            max-width: 100%;
+            /* Ocupa toda largura disponível */
+            margin-bottom: 12px;
+            box-sizing: border-box;
+        }
+
+        #board-wrapper {
+            width: 100%;
+            max-width: 100%;
+            display: flex;
+            justify-content: center;
+            margin: 8px 0;
+            position: relative;
+        }
+
+        #board {
+            width: 100% !important;
+            max-width: min(700px, 75vh) !important;
+            height: auto !important;
+            aspect-ratio: 1 / 1;
+            margin: 0 auto !important;
+            /* Mantém quadrado perfeito */
+        }
+
+        /* Ajuste do tabuleiro para telas menores */
+        @media (max-width: 480px) {
+            #board {
+                width: 95vw !important;
+                max-width: 380px !important;
+                height: 95vw !important;
+                max-height: 380px !important;
+                border-width: 6px !important;
+            }
+        }
+
+        @media (max-width: 360px) {
+            #board {
+                width: 98vw !important;
+                max-width: 320px !important;
+                height: 98vw !important;
+                max-height: 320px !important;
+            }
+        }
+
+        #game-info {
+            width: 100%;
+            margin-top: 15px;
+            box-sizing: border-box;
+            background: rgba(23, 32, 48, 0.9);
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        #game-buttons {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+            justify-content: center;
+            flex-wrap: wrap;
+            /* Botões podem quebrar linha em telas muito pequenas */
+        }
+
+        .btn-game {
+            min-width: 100px;
+            /* Largura mínima dos botões */
+            flex: 1 1 auto;
+            /* Cresce e encolhe conforme disponível */
+            max-width: 140px;
+            /* Limita expansão excessiva */
+        }
+
+        /* Ajuste específico para telas muito estreitas */
+        @media (max-width: 400px) {
+            #game-buttons {
+                gap: 6px;
+            }
+
+            .btn-game {
+                min-width: 90px;
+                font-size: 0.7rem;
+                padding: 8px 6px;
+            }
+        }
+
+        /* Ajuste do HUD para telas estreitas */
+        @media (max-width: 480px) {
+            #players-hud {
+                padding: 8px 12px;
+            }
+
+            .player-card {
+                font-size: 0.85rem;
+                gap: 6px;
+            }
+
+            .avatar-small {
+                width: 30px;
+                height: 30px;
+            }
+
+            .vs-timer {
+                width: 36px;
+                height: 36px;
+                font-size: 0.9rem;
+            }
+        }
+
+        /* --- TOUCH-FRIENDLY PARA CELULARES --- */
+        @media (hover: none) and (pointer: coarse) {
+            .btn-game {
+                padding: 12px 8px;
+                /* Mais área de toque */
+                min-height: 44px;
+                /* Tamanho mínimo recomendado para toque */
+            }
+
+            .piece {
+                cursor: default;
+                /* Remove cursor em dispositivos touch */
+            }
+        }
+
+        /* --- INDICADORES DE PEDRA (Visual) --- */
+        .piece-indicator {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: inline-block;
+            vertical-align: middle;
+            margin: 0 6px;
+            box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+        }
+
+        .piece-indicator.white {
+            background: radial-gradient(circle at 30% 30%, #ffffff, #cfd8dc);
+            border: 1px solid #90a4ae;
+        }
+
+        .piece-indicator.black {
+            background: radial-gradient(circle at 30% 30%, #616161, #212121);
+            border: 1px solid #000000;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="main-container">
+        <!-- =========================================
+         TELA DE JOGO
+         ========================================= -->
+        <div id="game-container">
+            <div class="game-top-bar">
+                <div id="spectator-indicator" class="hidden badge-warning">ESPECTADOR</div>
+                <div id="tournament-indicator" class="hidden badge-purple">TORNEIO</div>
+            </div>
+
+            <div id="players-hud" class="players-hud hidden">
+                <div class="player-card white-player">
+                    <img id="white-player-avatar" src="" class="avatar-small hidden">
+                    <div class="player-details" style="display: flex; align-items: center;">
+                        <span id="white-player-name">Jog 1</span>
+                        <div class="piece-indicator white" title="Brancas"></div>
+                    </div>
+                </div>
+                <div class="vs-timer">
+                    <span id="timer">40</span>
+                </div>
+                <div class="player-card black-player">
+                    <div class="player-details right"
+                        style="display: flex; align-items: center; justify-content: flex-end;">
+                        <div class="piece-indicator black" title="Pretas"></div>
+                        <span id="black-player-name">Jog 2</span>
+                    </div>
+                    <img id="black-player-avatar" src="" class="avatar-small hidden">
+                </div>
+            </div>
+
+            <p id="game-status">Aguardando...</p>
+
+            <div id="board-wrapper">
+                <div id="board"></div>
+            </div>
+
+            <div id="game-info">
+                <p>Vez de: <span id="turn">Brancas</span></p>
+                <div id="game-buttons">
+                    <button id="resign-btn" class="btn-game btn-lose"><i class="fa-solid fa-flag"></i> Desistir</button>
+                    <button id="draw-btn" class="btn-game btn-draw"><i class="fa-solid fa-handshake"></i>
+                        Empate</button>
+                    <button id="spectator-leave-btn" class="hidden btn-game btn-exit">Sair</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modais de Jogo -->
+    <div id="game-over-overlay" class="hidden modal-overlay">
+        <div class="modal-card">
+            <div id="winner-screen" class="hidden">
+                <h1 style="color:#2ecc71">Vitória!</h1>
+                <p class="revanche-status"></p>
+                <div class="confirm-buttons">
+                    <button class="replay-btn btn-secondary">Assistir Partida</button>
+                    <button class="revanche-btn btn-confirm">Revanche</button>
+                    <button class="exit-lobby-btn btn-close">Sair</button>
+                </div>
+            </div>
+            <div id="loser-screen" class="hidden">
+                <h1 style="color:#e74c3c">Derrota</h1>
+                <p class="revanche-status"></p>
+                <div class="confirm-buttons">
+                    <button class="replay-btn btn-secondary">Assistir Partida</button>
+                    <button class="revanche-btn btn-confirm">Revanche</button>
+                    <button class="exit-lobby-btn btn-close">Sair</button>
+                </div>
+            </div>
+            <div id="draw-screen" class="hidden">
+                <h1>Empate</h1>
+                <p id="draw-reason"></p>
+                <p class="revanche-status"></p>
+                <div class="confirm-buttons">
+                    <button class="replay-btn btn-secondary">Assistir Partida</button>
+                    <button class="revanche-btn btn-confirm">Revanche</button>
+                    <button class="exit-lobby-btn btn-close">Sair</button>
+                </div>
+            </div>
+            <div id="spectator-end-screen" class="hidden">
+                <p id="spectator-end-message"></p>
+                <button class="exit-lobby-btn btn-close">Sair</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="next-game-overlay" class="hidden modal-overlay">
+        <div class="modal-card">
+            <h2 id="next-game-title"></h2>
+            <p id="match-score-display"></p>
+            <p>Iniciando em <span id="next-game-timer"></span></p>
+        </div>
+    </div>
+
+    <div id="draw-request-overlay" class="hidden modal-overlay">
+        <div class="modal-card">
+            <h3>Pedido de Empate</h3>
+            <button id="accept-draw-btn" class="btn-confirm">Aceitar</button>
+            <button id="decline-draw-btn" class="btn-close">Recusar</button>
+        </div>
+    </div>
+
+    <div id="connection-lost-overlay" class="hidden modal-overlay">
+        <div class="modal-card">
+            <h3>Conexão</h3>
+            <p id="connection-lost-message"></p>
+        </div>
+    </div>
+
+    <!-- ÁUDIOS -->
+    <audio id="move-sound" src="/sounds/move.mp3"></audio>
+    <audio id="capture-sound" src="/sounds/capture.mp3"></audio>
+
+    <!-- Scripts -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/gameLogic.js"></script>
+    <script src="js/ui-helpers.js"></script>
+    <script src="js/gameCore.js"></script>
+    <script src="js/script.js"></script>
+</body>
+
+</html>

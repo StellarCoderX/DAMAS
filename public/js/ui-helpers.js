@@ -97,6 +97,7 @@ window.UI = {
       let deltaY = toRect.top - fromRect.top;
 
       const isFlipped = this.elements.board.classList.contains("board-flipped");
+      if (!piece) return resolve();
 
       piece.style.willChange = "transform";
       piece.style.zIndex = 100;
@@ -204,6 +205,7 @@ window.UI = {
 
   createBoard: function (boardSize, clickHandler) {
     const board = this.elements.board;
+    if (!board) return; // Segurança se estiver no Lobby
     board.innerHTML = "";
 
     this.boardCache = []; // Reseta o cache
@@ -246,17 +248,19 @@ window.UI = {
 
   resetLobbyUI: function () {
     const el = this.elements;
-    el.waitingArea.classList.add("hidden");
-    el.createRoomBtn.disabled = false;
-    el.betAmountInput.disabled = false;
-    el.gameModeSelect.disabled = false;
-    el.timeControlSelect.disabled = false;
-    el.timerSelectionContainer.style.display = "flex";
+    if (el.waitingArea) el.waitingArea.classList.add("hidden");
+    if (el.createRoomBtn) el.createRoomBtn.disabled = false;
+    if (el.betAmountInput) el.betAmountInput.disabled = false;
+    if (el.gameModeSelect) el.gameModeSelect.disabled = false;
+    if (el.timeControlSelect) el.timeControlSelect.disabled = false;
+    if (el.timerSelectionContainer)
+      el.timerSelectionContainer.style.display = "flex";
     if (el.lobbyErrorMessage) el.lobbyErrorMessage.textContent = "";
   },
 
   renderOpenRooms: function (rooms) {
     const listEl = this.elements.openRoomsList;
+    if (!listEl) return; // Segurança se estiver no Jogo
     listEl.innerHTML = "";
     if (!rooms || rooms.length === 0) {
       listEl.innerHTML = "<p>Nenhuma sala aberta no momento. Crie uma!</p>";
@@ -310,6 +314,7 @@ window.UI = {
 
   renderActiveRooms: function (rooms) {
     const listEl = this.elements.activeRoomsList;
+    if (!listEl) return; // Segurança se estiver no Jogo
     listEl.innerHTML = "";
     if (!rooms || rooms.length === 0) {
       listEl.innerHTML = "<p>Nenhum jogo em andamento.</p>";
@@ -353,6 +358,7 @@ window.UI = {
 
   updateTimerOptions: function (controlType) {
     const select = this.elements.timerSelect;
+    if (!select) return;
     select.innerHTML = "";
     let options = [];
 
@@ -452,9 +458,11 @@ window.UI = {
 
   updateTurnIndicator: function (isMyTurn) {
     if (isMyTurn) {
-      this.elements.board.classList.add("your-turn-active");
+      if (this.elements.board)
+        this.elements.board.classList.add("your-turn-active");
     } else {
-      this.elements.board.classList.remove("your-turn-active");
+      if (this.elements.board)
+        this.elements.board.classList.remove("your-turn-active");
     }
   },
 
@@ -513,48 +521,83 @@ window.UI = {
   },
 
   showGameScreen: function (isSpectator) {
-    this.elements.lobbyContainer.classList.add("hidden");
-    this.elements.gameContainer.classList.remove("hidden");
+    if (this.elements.lobbyContainer)
+      this.elements.lobbyContainer.classList.add("hidden");
+    if (this.elements.gameContainer)
+      this.elements.gameContainer.classList.remove("hidden");
 
-    this.elements.overlay.classList.add("hidden");
-    this.elements.winnerScreen.classList.add("hidden");
-    this.elements.loserScreen.classList.add("hidden");
-    this.elements.drawScreen.classList.add("hidden");
-    this.elements.spectatorEndScreen.classList.add("hidden");
-    this.elements.nextGameOverlay.classList.add("hidden");
-    this.elements.drawRequestOverlay.classList.add("hidden");
-    this.elements.connectionLostOverlay.classList.add("hidden");
+    if (this.elements.overlay) this.elements.overlay.classList.add("hidden");
+    if (this.elements.winnerScreen)
+      this.elements.winnerScreen.classList.add("hidden");
+    if (this.elements.loserScreen)
+      this.elements.loserScreen.classList.add("hidden");
+    if (this.elements.drawScreen)
+      this.elements.drawScreen.classList.add("hidden");
+    if (this.elements.spectatorEndScreen)
+      this.elements.spectatorEndScreen.classList.add("hidden");
+    if (this.elements.nextGameOverlay)
+      this.elements.nextGameOverlay.classList.add("hidden");
+    if (this.elements.drawRequestOverlay)
+      this.elements.drawRequestOverlay.classList.add("hidden");
+    if (this.elements.connectionLostOverlay)
+      this.elements.connectionLostOverlay.classList.add("hidden");
 
     if (isSpectator) {
-      this.elements.spectatorIndicator.classList.remove("hidden");
-      this.elements.spectatorLeaveBtn.classList.remove("hidden");
-      this.elements.resignBtn.classList.add("hidden");
-      this.elements.drawBtn.classList.add("hidden");
+      if (this.elements.spectatorIndicator)
+        this.elements.spectatorIndicator.classList.remove("hidden");
+      if (this.elements.spectatorLeaveBtn)
+        this.elements.spectatorLeaveBtn.classList.remove("hidden");
+      if (this.elements.resignBtn)
+        this.elements.resignBtn.classList.add("hidden");
+      if (this.elements.drawBtn) this.elements.drawBtn.classList.add("hidden");
     } else {
-      this.elements.spectatorIndicator.classList.add("hidden");
-      this.elements.spectatorLeaveBtn.classList.add("hidden");
-      this.elements.resignBtn.classList.remove("hidden");
-      this.elements.drawBtn.classList.remove("hidden");
-      this.elements.drawBtn.disabled = false;
-      this.elements.drawBtn.textContent = "Empate";
+      if (this.elements.spectatorIndicator)
+        this.elements.spectatorIndicator.classList.add("hidden");
+      if (this.elements.spectatorLeaveBtn)
+        this.elements.spectatorLeaveBtn.classList.add("hidden");
+      if (this.elements.resignBtn)
+        this.elements.resignBtn.classList.remove("hidden");
+      if (this.elements.drawBtn) {
+        this.elements.drawBtn.classList.remove("hidden");
+        this.elements.drawBtn.disabled = false;
+        this.elements.drawBtn.textContent = "Empate";
+      }
     }
   },
 
   returnToLobbyScreen: function () {
-    this.elements.gameContainer.classList.add("hidden");
-    this.elements.overlay.classList.add("hidden");
-    this.elements.winnerScreen.classList.add("hidden");
-    this.elements.loserScreen.classList.add("hidden");
-    this.elements.drawScreen.classList.add("hidden");
-    this.elements.spectatorEndScreen.classList.add("hidden");
-    this.elements.nextGameOverlay.classList.add("hidden");
-    this.elements.drawRequestOverlay.classList.add("hidden");
-    this.elements.connectionLostOverlay.classList.add("hidden");
+    // Se estiver na página de jogo, redireciona para a index
+    if (window.location.pathname.includes("jogo.html")) {
+      window.location.href = "/";
+      return;
+    }
 
-    this.elements.lobbyContainer.classList.remove("hidden");
-    this.elements.board.classList.remove("board-flipped");
-    this.elements.board.innerHTML = "";
-    this.elements.playersHud.classList.add("hidden");
+    if (this.elements.gameContainer)
+      this.elements.gameContainer.classList.add("hidden");
+    if (this.elements.overlay) this.elements.overlay.classList.add("hidden");
+    if (this.elements.winnerScreen)
+      this.elements.winnerScreen.classList.add("hidden");
+    if (this.elements.loserScreen)
+      this.elements.loserScreen.classList.add("hidden");
+    if (this.elements.drawScreen)
+      this.elements.drawScreen.classList.add("hidden");
+    if (this.elements.spectatorEndScreen)
+      this.elements.spectatorEndScreen.classList.add("hidden");
+    if (this.elements.nextGameOverlay)
+      this.elements.nextGameOverlay.classList.add("hidden");
+    if (this.elements.drawRequestOverlay)
+      this.elements.drawRequestOverlay.classList.add("hidden");
+    if (this.elements.connectionLostOverlay)
+      this.elements.connectionLostOverlay.classList.add("hidden");
+
+    if (this.elements.lobbyContainer)
+      this.elements.lobbyContainer.classList.remove("hidden");
+    if (this.elements.board) {
+      this.elements.board.classList.remove("board-flipped");
+      this.elements.board.innerHTML = "";
+    }
+    if (this.elements.playersHud)
+      this.elements.playersHud.classList.add("hidden");
 
     this.resetLobbyUI();
   },
