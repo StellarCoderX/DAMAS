@@ -94,7 +94,8 @@
 
         #board {
             width: 100% !important;
-            max-width: min(700px, 75vh) !important;
+            max-width: min(700px, 80vh) !important;
+            /* Altura aumentada para melhor visualização */
             height: auto !important;
             aspect-ratio: 1 / 1;
             margin: 0 auto !important;
@@ -165,11 +166,23 @@
         @media (max-width: 480px) {
             #players-hud {
                 padding: 8px 12px;
+                /* Garante que os itens fiquem alinhados e não quebrem a linha */
+                display: flex;
+                align-items: center;
             }
 
             .player-card {
                 font-size: 0.85rem;
                 gap: 6px;
+                /* Permite que o card do jogador encolha e esconde o conteúdo que transborda */
+                flex: 1;
+                min-width: 0;
+                overflow: hidden;
+            }
+
+            /* Garante que o nome do jogador não quebre a linha, para o overflow do pai funcionar */
+            .player-details {
+                white-space: nowrap;
             }
 
             .avatar-small {
@@ -182,6 +195,7 @@
                 height: 36px;
                 font-size: 0.9rem;
             }
+
         }
 
         /* --- TOUCH-FRIENDLY PARA CELULARES --- */
