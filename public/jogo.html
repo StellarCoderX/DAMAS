@@ -108,81 +108,16 @@
 
         #board-wrapper {
             width: 100%;
-            max-width: 100%;
             display: flex;
             justify-content: center;
-            margin: 8px 0;
-            position: relative;
-            overflow: visible;
-            /* Garante que nada seja cortado */
         }
 
         #board {
-            width: 100% !important;
-            max-width: min(700px, 85vh) !important;
-            height: auto !important;
+            width: min(95vw, 95vh);
+            height: min(95vw, 95vh);
             aspect-ratio: 1 / 1;
-            margin: 0 auto !important;
-            box-sizing: border-box;
-            /* Importante para incluir bordas no cálculo */
-        }
-
-        /* Ajuste do tabuleiro para telas menores - CORRIGIDO */
-        @media (max-width: 480px) {
-            #board {
-                width: 90vw !important;
-                /* Reduzi de 95vw para 90vw */
-                max-width: 360px !important;
-                /* Reduzi de 380px para 360px */
-                height: 90vw !important;
-                max-height: 360px !important;
-                border-width: 4px !important;
-                /* Reduzi borda para economizar espaço */
-            }
-
-            #board-wrapper {
-                padding: 0 5px;
-                /* Adiciona um pequeno padding nas laterais */
-            }
-        }
-
-        @media (max-width: 360px) {
-            #board {
-                width: 88vw !important;
-                /* Reduzi de 98vw para 88vw */
-                max-width: 300px !important;
-                /* Reduzi de 320px para 300px */
-                height: 88vw !important;
-                max-height: 300px !important;
-            }
-
-            #board-wrapper {
-                padding: 0 3px;
-            }
-        }
-
-        /* Ajuste especial para telas muito estreitas */
-        @media (max-width: 320px) {
-            #board {
-                width: 85vw !important;
-                max-width: 280px !important;
-                height: 85vw !important;
-                max-height: 280px !important;
-            }
-        }
-
-        /* Garante que o container principal não cause overflow */
-        #game-container {
-            overflow: hidden;
-            /* Evita scroll horizontal */
-        }
-
-        /* Se o problema persistir, tente este ajuste adicional: */
-        @media (max-width: 480px) {
-            #game-container {
-                padding: 8px 5px;
-                /* Reduz padding nas laterais */
-            }
+            max-width: 100%;
+            max-height: 100%;
         }
 
         #game-info {
