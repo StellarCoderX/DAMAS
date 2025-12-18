@@ -341,6 +341,34 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (e) {
       console.warn("Could not force UI adjustments for spectator", e);
     }
+    // Atualiza contador de espectadores se fornecido
+    try {
+      if (payload && payload.spectatorCount !== undefined) {
+        const sc = document.getElementById("spectator-count");
+        const scn = document.getElementById("spectator-count-number");
+        if (sc && scn) {
+          scn.textContent = String(payload.spectatorCount || 0);
+          sc.classList.remove("hidden");
+          sc.style.display = "flex";
+        }
+      }
+    } catch (e) {}
+  });
+
+  socket.on("spectatorCount", (data) => {
+    try {
+      const sc = document.getElementById("spectator-count");
+      const scn = document.getElementById("spectator-count-number");
+      if (!sc || !scn) return;
+      scn.textContent = String(data.count || 0);
+      if (data.count && data.count > 0) {
+        sc.classList.remove("hidden");
+        sc.style.display = "flex";
+      } else {
+        sc.classList.add("hidden");
+        sc.style.display = "none";
+      }
+    } catch (e) {}
   });
 
   socket.on("timerUpdate", (data) => {

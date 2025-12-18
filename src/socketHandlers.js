@@ -232,6 +232,10 @@ async function startGameLogic(room) {
   io.to(room.roomCode).emit("gameStart", gameState);
   io.to(whitePlayer.socketId).emit("gameStart", gameState);
   io.to(blackPlayer.socketId).emit("gameStart", gameState);
+  // notify current spectator count to all in room
+  io.to(room.roomCode).emit("spectatorCount", {
+    count: room.spectators ? room.spectators.size : 0,
+  });
 }
 
 // --- UPDATE: Agora aceita clientMoveId ---
@@ -532,6 +536,9 @@ function initializeSocket(ioInstance) {
       }
 
       socket.join(roomCode);
+      // Track spectators per room
+      if (!room.spectators) room.spectators = new Set();
+      room.spectators.add(socket.id);
 
       const gameState = {
         ...room.game,
@@ -558,6 +565,12 @@ function initializeSocket(ioInstance) {
         ...timeData,
         timeControl: room.timeControl,
         isSpectator: true,
+        spectatorCount: room.spectators ? room.spectators.size : 0,
+      });
+
+      // Notify room about updated spectator count
+      io.to(roomCode).emit("spectatorCount", {
+        count: room.spectators ? room.spectators.size : 0,
       });
     });
 
@@ -877,6 +890,10 @@ function initializeSocket(ioInstance) {
             ...timeData,
           };
           gameResumedPayload.gameState.timerActive = !!room.game.timerActive;
+          // include spectator count so players get current number immediately
+          gameResumedPayload.spectatorCount = room.spectators
+            ? room.spectators.size
+            : 0;
           // Emitting gameResumed (timerActive included)
           io.to(roomCode).emit("gameResumed", gameResumedPayload);
 
@@ -903,10 +920,26 @@ function initializeSocket(ioInstance) {
 
     socket.on("disconnect", () => {
       const WAIT_TIME = 60;
-
-      const roomCode = Object.keys(gameRooms).find((rc) =>
+      let roomCode = Object.keys(gameRooms).find((rc) =>
         gameRooms[rc].players.some((p) => p.socketId === socket.id)
       );
+
+      // If not a player, check if it's a spectator in any room
+      if (!roomCode) {
+        roomCode = Object.keys(gameRooms).find(
+          (rc) =>
+            gameRooms[rc].spectators && gameRooms[rc].spectators.has(socket.id)
+        );
+        if (roomCode) {
+          const room = gameRooms[roomCode];
+          // remove spectator and notify count
+          room.spectators.delete(socket.id);
+          io.to(roomCode).emit("spectatorCount", {
+            count: room.spectators ? room.spectators.size : 0,
+          });
+          socket.leave(roomCode);
+        }
+      }
 
       if (!roomCode) return;
       const room = gameRooms[roomCode];
@@ -1112,6 +1145,13 @@ function initializeSocket(ioInstance) {
           delete gameRooms[roomCode];
         }
       } else {
+        // If non-player leaving (likely spectator), remove from spectators set
+        if (room.spectators && room.spectators.has(socket.id)) {
+          room.spectators.delete(socket.id);
+          io.to(roomCode).emit("spectatorCount", {
+            count: room.spectators ? room.spectators.size : 0,
+          });
+        }
         socket.leave(roomCode);
       }
     });
