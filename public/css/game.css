@@ -530,9 +530,9 @@
   }
   .vs-timer {
     order: 0;
-    font-size: 1.4em;
+    font-size: 1.6em;
   }
   #timer {
-    font-size: 1.2rem;
+    font-size: 1.6rem;
   }
 }
