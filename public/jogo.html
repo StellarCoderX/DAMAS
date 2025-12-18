@@ -27,7 +27,6 @@
 
     <style>
         /* --- CONTAINER PRINCIPAL OTIMIZADO --- */
-        /* --- CONTAINER PRINCIPAL OTIMIZADO --- */
         #game-container {
             display: flex;
             flex-direction: column;
@@ -43,6 +42,22 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
         }
+
+        /* Desktop */
+        @media (min-width: 768px) {
+            #board {
+                box-sizing: border-box;
+            }
+
+        }
+
+        /* Mobile mantém borda maior */
+        @media (max-width: 767px) {
+            #board {
+                border-width: 10px !important;
+            }
+        }
+
 
         /* Ajustes para telas maiores */
         @media (min-width: 768px) {
