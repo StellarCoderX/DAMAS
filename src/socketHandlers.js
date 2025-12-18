@@ -1,6 +1,7 @@
 // src/socketHandlers.js
 
 const User = require("../models/User");
+const MatchHistory = require("../models/MatchHistory");
 const {
   standardOpening,
   idfTablitaOpenings,
@@ -238,6 +239,75 @@ async function startGameLogic(room) {
   io.to(room.roomCode).emit("spectatorCount", {
     count: room.spectators ? room.spectators.size : 0,
   });
+
+  // If no move is made within 30 seconds from game start, refund both players and remove the room
+  try {
+    if (room.firstMoveTimeout) clearTimeout(room.firstMoveTimeout);
+    room.firstMoveTimeout = setTimeout(async () => {
+      try {
+        const currentRoom = gameRooms[room.roomCode];
+        if (!currentRoom) return;
+        const g = currentRoom.game;
+        if (!g) return;
+        // If no moves were made yet
+        if (!g.moveHistory || g.moveHistory.length === 0) {
+          console.log(
+            `[GameWatchdog] No moves in 30s for room ${room.roomCode}. Refunding and removing room.`
+          );
+          // Refund each player and emit balance + redirect event
+          const playersEmails = currentRoom.players.map((x) => x.user.email);
+          for (const p of currentRoom.players) {
+            try {
+              const updated = await User.findOneAndUpdate(
+                { email: p.user.email },
+                { $inc: { saldo: currentRoom.bet } },
+                { new: true }
+              );
+              if (updated && io) {
+                io.to(p.socketId).emit("balanceUpdate", {
+                  email: updated.email,
+                  newSaldo: updated.saldo,
+                });
+                io.to(p.socketId).emit("refundAndReturn", {
+                  message: "Partida inativa: reembolso efetuado.",
+                  roomCode: currentRoom.roomCode,
+                });
+              }
+            } catch (userErr) {
+              console.error("Error refunding user:", userErr);
+            }
+          }
+
+          // Save a single MatchHistory entry marking the refund
+          if (typeof MatchHistory !== "undefined") {
+            try {
+              await MatchHistory.create({
+                player1: playersEmails[0] || "",
+                player2: playersEmails[1] || "",
+                winner: null,
+                bet: currentRoom.bet,
+                gameMode: currentRoom.gameMode || "classic",
+                reason: "Partida inativa (nenhum lance) - reembolso",
+                createdAt: new Date(),
+              });
+            } catch (eh) {
+              console.error("Failed to save refund MatchHistory:", eh);
+            }
+          }
+
+          // Clean up timers and room
+          if (currentRoom.timerInterval)
+            clearInterval(currentRoom.timerInterval);
+          delete gameRooms[room.roomCode];
+          if (io) io.emit("updateLobby", getLobbyInfo());
+        }
+      } catch (err) {
+        console.error("Error in firstMove timeout handler:", err);
+      }
+    }, 30 * 1000);
+  } catch (err) {
+    console.error("Error scheduling firstMove timeout:", err);
+  }
 }
 
 // --- UPDATE: Agora aceita clientMoveId ---
@@ -256,6 +326,11 @@ async function executeMove(roomCode, from, to, socketId, clientMoveId = null) {
   }
 
   if (game.isFirstMove) {
+    // clear first-move watchdog (player acted within allowed window)
+    if (gameRoom.firstMoveTimeout) {
+      clearTimeout(gameRoom.firstMoveTimeout);
+      gameRoom.firstMoveTimeout = null;
+    }
     game.isFirstMove = false;
     // Marca que o timer está oficialmente ativo (será enviado no estado do jogo)
     game.timerActive = true;
@@ -1021,12 +1096,22 @@ function initializeSocket(ioInstance) {
         if (opponent) {
           if (room.timerInterval) clearInterval(room.timerInterval);
 
-          io.to(opponent.socketId).emit("opponentConnectionLost", {
-            waitTime: WAIT_TIME,
-          });
-          console.log(
-            `[Socket] Notified opponent ${opponent.socketId} of disconnect, starting ${WAIT_TIME}s timeout for room ${roomCode}`
-          );
+          // Notify opponent that their adversary disconnected and should return
+          // within WAIT_TIME seconds. This tells the remaining player to wait
+          // without closing the game.
+          try {
+            io.to(opponent.socketId).emit("opponentConnectionLost", {
+              waitTime: WAIT_TIME,
+            });
+            console.log(
+              `[Socket] Notified opponent ${opponent.socketId} of disconnect, starting ${WAIT_TIME}s timeout for room ${roomCode}`
+            );
+          } catch (e) {
+            console.error(
+              `[Socket] Error emitting opponentConnectionLost to ${opponent.socketId}`,
+              e
+            );
+          }
           room.disconnectTimeout = setTimeout(() => {
             if (!gameRooms[roomCode]) return;
             const disconnectedPlayer = room.players.find(
@@ -1045,6 +1130,15 @@ function initializeSocket(ioInstance) {
               room,
               "Oponente desconectou e não retornou."
             );
+            // Immediately remove room after declaring victory due to disconnect
+            try {
+              if (gameRooms[roomCode]) {
+                delete gameRooms[roomCode];
+                if (io) io.emit("updateLobby", getLobbyInfo());
+              }
+            } catch (e) {
+              console.error("Error removing room after disconnect end:", e);
+            }
           }, WAIT_TIME * 1000);
         }
       } else if (room && room.players.length === 1 && !room.isGameConcluded) {

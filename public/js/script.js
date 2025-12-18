@@ -624,13 +624,20 @@ document.addEventListener("DOMContentLoaded", () => {
     alert("Jogo não encontrado.");
     GameCore.returnToLobbyLogic();
   });
+  socket.on("refundAndReturn", (data) => {
+    try {
+      // Mostrar mensagem curta e retornar ao lobby
+      if (data && data.message) alert(data.message);
+    } catch (e) {}
+    GameCore.returnToLobbyLogic();
+  });
+  // 'opponentConnectionLost' was removed server-side; overlay behavior disabled.
   socket.on("opponentConnectionLost", (d) => {
     if (!window.isSpectator) {
       const ov = document.getElementById("connection-lost-overlay");
-      ov.classList.remove("hidden");
-      document.getElementById(
-        "connection-lost-message"
-      ).textContent = `Oponente caiu. Aguarde ${d.waitTime}s...`;
+      if (ov) ov.classList.remove("hidden");
+      const msg = document.getElementById("connection-lost-message");
+      if (msg) msg.textContent = `Oponente caiu. Aguarde ${d.waitTime}s...`;
     }
   });
   socket.on("opponentDisconnected", () => {
