@@ -42,7 +42,7 @@ window.initLobby = function (socket, UI) {
       const now = new Date();
       const target = new Date();
       const targetHour = 0;
-      const targetMinute = 8;
+      const targetMinute = 18;
 
       target.setHours(targetHour, targetMinute, 0, 0);
 

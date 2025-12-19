@@ -7,7 +7,7 @@ const MIN_PLAYERS = 4;
 const MAX_PLAYERS = 4; // Limite máximo de inscritos
 const ENTRY_FEE = 2.0;
 const TOURNAMENT_HOUR = 0;
-const TOURNAMENT_MINUTE = 8;
+const TOURNAMENT_MINUTE = 18;
 
 let io; // Referência ao Socket.IO
 let gameRooms; // Referência aos quartos de jogo (Injeção de Dependência)
@@ -549,6 +549,25 @@ async function handleTournamentGameEnd(winnerEmail, loserEmail, room) {
     `[Torneio] Partida ${room.matchId} finalizada. Vencedor: ${winnerEmail}`
   );
 
+  // Forçar retorno ao lobby de todos os jogadores desta partida (tanto vencedor quanto perdedor)
+  try {
+    if (room && room.players && room.players.length > 0) {
+      for (const p of room.players) {
+        if (p && p.socketId) {
+          try {
+            const s = io.sockets.sockets.get(p.socketId);
+            if (s) s.emit("forceReturnToLobby");
+          } catch (e) {
+            console.error(
+              "Erro emitindo forceReturnToLobby para jogador do torneio:",
+              e
+            );
+          }
+        }
+      }
+    }
+  } catch (e) {}
+
   // Funcionalidade "Assistir Oponente"
   if (winnerEmail) {
     const currentRoundMatches = tournament.matches.filter(
@@ -680,6 +699,20 @@ async function distributePrizes(tournament, championEmail) {
   console.log(
     `[Torneio] Finalizado. Campeão: ${championEmail} (+${championPrize}), Vice: ${runnerUpEmail} (+${runnerUpPrize})`
   );
+
+  // Forçar retorno ao lobby dos finalistas (se estiverem conectados)
+  try {
+    const sockets = await io.fetchSockets();
+    sockets.forEach((sock) => {
+      try {
+        if (!sock.userData || !sock.userData.email) return;
+        const email = sock.userData.email;
+        if (email === championEmail || email === runnerUpEmail) {
+          sock.emit("forceReturnToLobby");
+        }
+      } catch (e) {}
+    });
+  } catch (e) {}
 }
 
 async function recoverStuckTournaments() {
