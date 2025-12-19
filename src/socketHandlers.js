@@ -25,8 +25,13 @@ const {
   initializeManager,
 } = require("./gameManager");
 
+// Referência ao tournamentManager para encerrar partidas de torneio programaticamente
+const tournamentManager = require("./tournamentManager");
+
 const gameRooms = {};
 let io; // Variável global para instância do Socket.IO
+// Contador simples para razões de desconexão (diagnóstico)
+const disconnectReasonCounts = {};
 
 function getLobbyInfo() {
   const waitingRooms = Object.values(gameRooms)
@@ -69,6 +74,138 @@ function getLobbyInfo() {
   return { waiting: waitingRooms, active: activeRooms };
 }
 
+// Agenda e gerencia timeout de inatividade por turno (10s)
+function scheduleTurnInactivity(roomCode) {
+  const room = gameRooms[roomCode];
+  if (!room || room.isGameConcluded) return;
+
+  // limpa qualquer timeout anterior
+  if (room.turnInactivityTimeout) clearTimeout(room.turnInactivityTimeout);
+
+  // duração fixa de 10s conforme solicitado
+  const DURATION = 10 * 1000;
+
+  room.turnInactivityTimeout = setTimeout(() => {
+    try {
+      const r = gameRooms[roomCode];
+      if (!r || r.isGameConcluded || !r.game) return;
+
+      const currentPlayerColor = r.game.currentPlayer; // 'b' ou 'p'
+      const currentSocketId =
+        r.game.players[currentPlayerColor === "b" ? "white" : "black"];
+      console.log(
+        `[DEBUG scheduleTurnInactivity] room=${roomCode} currentPlayer=${currentPlayerColor} currentSocketId=${currentSocketId} _autoPassCount=${
+          r._autoPassCount || 0
+        } moveHistoryLen=${r.game.moveHistory ? r.game.moveHistory.length : 0}`
+      );
+
+      // Verifica se o socket atual está presente/connected
+      const sock = currentSocketId
+        ? io.sockets.sockets.get(currentSocketId)
+        : null;
+      const isPresent = !!(sock && sock.connected);
+
+      // Se ausente ou inativo por 10s, passa a vez para o oponente
+      if (!isPresent) {
+        // Passa a vez
+        r.game.currentPlayer = r.game.currentPlayer === "b" ? "p" : "b";
+        r.turnInactivityTimeoutReason = "auto-pass";
+        // conta auto-passes consecutivos para detectar ambos ausentes
+        r._autoPassCount = (r._autoPassCount || 0) + 1;
+        io.to(r.roomCode).emit("turnPassedDueToInactivity", {
+          roomCode: r.roomCode,
+          newCurrentPlayer: r.game.currentPlayer,
+        });
+
+        // Emite estado atualizado do jogo
+        const bestCaptures = findBestCaptureMoves(r.game.currentPlayer, r.game);
+        const mandatoryPieces = bestCaptures.map((seq) => seq[0]);
+        io.to(r.roomCode).emit("gameStateUpdate", {
+          ...r.game,
+          mandatoryPieces,
+        });
+
+        // Reinicia timers do jogo do servidor
+        try {
+          if (r.timerInterval) clearInterval(r.timerInterval);
+        } catch (e) {}
+        // Inicia timer normal (se aplicável)
+        if (r.game && r.game.timerActive) startTimer(r.roomCode);
+
+        // Se ambos jogadores receberam auto-pass sem que haja movimentos, encerramos como ambos forfeit
+        if (
+          r._autoPassCount >= 2 &&
+          r.game.moveHistory &&
+          r.game.moveHistory.length === 0
+        ) {
+          (async () => {
+            try {
+              // Marca fim de partida por dupla falta
+              await tournamentManager.handleTournamentGameEnd(
+                "BOTH_FORFEIT",
+                null,
+                r
+              );
+            } catch (e) {
+              console.error("Erro encerrando partida BOTH_FORFEIT:", e);
+            }
+          })();
+          return;
+        }
+
+        // Agenda nova verificação para o próximo jogador
+        scheduleTurnInactivity(roomCode);
+      } else {
+        // jogador presente; se não jogar dentro de mais 10s, também passamos a vez
+        // Reagenda uma checagem final
+        room.turnInactivityTimeout = setTimeout(() => {
+          const rr = gameRooms[roomCode];
+          if (!rr || rr.isGameConcluded || !rr.game) return;
+          // Se ainda for o mesmo jogador e não houver movimento (moveHistory não cresceu), passa a vez
+          // Simples heurística: se o último move foi anterior à criação deste timer
+          rr.game.currentPlayer = rr.game.currentPlayer === "b" ? "p" : "b";
+          io.to(rr.roomCode).emit("turnPassedDueToInactivity", {
+            roomCode: rr.roomCode,
+            newCurrentPlayer: rr.game.currentPlayer,
+          });
+          rr._autoPassCount = (rr._autoPassCount || 0) + 1;
+          if (
+            rr._autoPassCount >= 2 &&
+            rr.game.moveHistory &&
+            rr.game.moveHistory.length === 0
+          ) {
+            (async () => {
+              try {
+                await tournamentManager.handleTournamentGameEnd(
+                  "BOTH_FORFEIT",
+                  null,
+                  rr
+                );
+              } catch (e) {
+                console.error("Erro encerrando partida BOTH_FORFEIT:", e);
+              }
+            })();
+            return;
+          }
+          const bestCaptures2 = findBestCaptureMoves(
+            rr.game.currentPlayer,
+            rr.game
+          );
+          const mandatoryPieces2 = bestCaptures2.map((seq) => seq[0]);
+          io.to(rr.roomCode).emit("gameStateUpdate", {
+            ...rr.game,
+            mandatoryPieces: mandatoryPieces2,
+          });
+          if (rr.game && rr.game.timerActive) startTimer(rr.roomCode);
+          scheduleTurnInactivity(roomCode);
+        }, DURATION);
+      }
+    } catch (err) {
+      console.error("Error in scheduleTurnInactivity:", err);
+    }
+  }, DURATION);
+}
+
 function cleanupPreviousRooms(userEmail) {
   const roomsToRemove = [];
   Object.keys(gameRooms).forEach((code) => {
@@ -84,6 +221,13 @@ function cleanupPreviousRooms(userEmail) {
   });
 
   roomsToRemove.forEach((code) => {
+    try {
+      console.log(
+        `[${new Date().toISOString()}] [Limpeza] Removendo sala ${code} (creator=${userEmail}) totalBefore=${
+          Object.keys(gameRooms).length
+        }`
+      );
+    } catch (e) {}
     delete gameRooms[code];
     console.log(
       `[Limpeza] Sala ${code} excluída automaticamente pois o criador (${userEmail}) iniciou outra ação.`
@@ -226,17 +370,31 @@ async function startGameLogic(room) {
     roomCode: room.roomCode,
     mandatoryPieces,
   };
+  console.log(
+    `[DEBUG startGameLogic] room=${room.roomCode} players=${room.players
+      .map((p) => p.user.email)
+      .join(",")} isTournament=${room.isTournament}`
+  );
 
   // Garantir que timerActive esteja explícito no payload
   gameState.timerActive = !!room.game.timerActive;
 
   io.to(room.roomCode).emit("gameStart", gameState);
-  io.to(whitePlayer.socketId).emit("gameStart", gameState);
-  io.to(blackPlayer.socketId).emit("gameStart", gameState);
+  if (whitePlayer && whitePlayer.socketId)
+    io.to(whitePlayer.socketId).emit("gameStart", gameState);
+  if (blackPlayer && blackPlayer.socketId)
+    io.to(blackPlayer.socketId).emit("gameStart", gameState);
   // notify current spectator count to all in room
   io.to(room.roomCode).emit("spectatorCount", {
     count: room.spectators ? room.spectators.size : 0,
   });
+
+  // Para partidas de torneio, iniciar verificação de inatividade por turno (10s)
+  if (room.isTournament) {
+    try {
+      scheduleTurnInactivity(room.roomCode);
+    } catch (e) {}
+  }
 
   // If no move is made within 30 seconds from game start, refund both players and remove the room
   try {
@@ -249,9 +407,21 @@ async function startGameLogic(room) {
         if (!g) return;
         // If no moves were made yet
         if (!g.moveHistory || g.moveHistory.length === 0) {
+          // Se for partida de torneio, NÃO reembolsar automaticamente.
+          // Em vez disso, aplicamos regra de inatividade/auto-pass.
+          if (currentRoom.isTournament) {
+            console.log(
+              `[GameWatchdog] Torneio: sem movimento em 30s na sala ${room.roomCode}. Aplicando regras de inatividade (auto-pass).`
+            );
+            // Inicia verificação de inatividade por turno (10s)
+            scheduleTurnInactivity(currentRoom.roomCode);
+            return;
+          }
+
           console.log(
             `[GameWatchdog] No moves in 30s for room ${room.roomCode}. Refunding and removing room.`
           );
+
           // Refund each player and emit balance + redirect event
           const playersEmails = currentRoom.players.map((x) => x.user.email);
           for (const p of currentRoom.players) {
@@ -261,7 +431,7 @@ async function startGameLogic(room) {
                 { $inc: { saldo: currentRoom.bet } },
                 { new: true }
               );
-              if (updated && io) {
+              if (updated && io && p.socketId) {
                 io.to(p.socketId).emit("balanceUpdate", {
                   email: updated.email,
                   newSaldo: updated.saldo,
@@ -296,6 +466,13 @@ async function startGameLogic(room) {
           // Clean up timers and room
           if (currentRoom.timerInterval)
             clearInterval(currentRoom.timerInterval);
+          try {
+            console.log(
+              `[${new Date().toISOString()}] [FirstMoveTimeout] Removendo room ${
+                room.roomCode
+              } por inatividade totalBefore=${Object.keys(gameRooms).length}`
+            );
+          } catch (e) {}
           delete gameRooms[room.roomCode];
           if (io) io.emit("updateLobby", getLobbyInfo());
         }
@@ -311,10 +488,27 @@ async function startGameLogic(room) {
 // --- UPDATE: Agora aceita clientMoveId ---
 async function executeMove(roomCode, from, to, socketId, clientMoveId = null) {
   if (!io) return;
+  try {
+    console.log(
+      `[DEBUG executeMove] room=${roomCode} from=${JSON.stringify(
+        from
+      )} to=${JSON.stringify(
+        to
+      )} socketId=${socketId} clientMoveId=${clientMoveId}`
+    );
+  } catch (e) {}
   const gameRoom = gameRooms[roomCode];
   if (!gameRoom || !gameRoom.game) return;
   if (gameRoom.isGameConcluded) return;
   const game = gameRoom.game;
+
+  // Clear any per-turn inactivity timer when a move is being processed
+  if (gameRoom.turnInactivityTimeout) {
+    clearTimeout(gameRoom.turnInactivityTimeout);
+    gameRoom.turnInactivityTimeout = null;
+  }
+  // Reset auto-pass counter since a real move occurred
+  gameRoom._autoPassCount = 0;
 
   const playerColor = game.currentPlayer;
 
@@ -536,6 +730,10 @@ async function executeMove(roomCode, from, to, socketId, clientMoveId = null) {
         );
       }
       resetTimer(roomCode);
+      // Agenda verificação de inatividade para o próximo jogador (10s)
+      try {
+        scheduleTurnInactivity(roomCode);
+      } catch (e) {}
     } else {
       game.mustCaptureWith = { row: to.row, col: to.col };
     }
@@ -653,6 +851,11 @@ function initializeSocket(ioInstance) {
 
       try {
         socket.join(roomCode);
+        console.log(
+          `[Socket] joinAsSpectator: socket=${socket.id} user=${
+            socket.userData?.email || "unknown"
+          } joined room=${roomCode}`
+        );
       } catch (e) {
         console.error(
           `[Socket] joinAsSpectator: socket.join failed for ${socket.id} room=${roomCode}`,
@@ -720,6 +923,13 @@ function initializeSocket(ioInstance) {
 
             // Remove the room immediately and notify lobby
             try {
+              try {
+                console.log(
+                  `[${new Date().toISOString()}] [SpectatorJoin] Removendo room ${roomCode} (revanche conflict) totalBefore=${
+                    Object.keys(gameRooms).length
+                  }`
+                );
+              } catch (e) {}
               delete gameRooms[roomCode];
               if (io) io.emit("updateLobby", getLobbyInfo());
             } catch (delErr) {
@@ -801,6 +1011,11 @@ function initializeSocket(ioInstance) {
         roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
       }
       socket.join(roomCode);
+      console.log(
+        `[Socket] createRoom: socket=${socket.id} user=${
+          socket.userData?.email || "unknown"
+        } created room=${roomCode}`
+      );
 
       gameRooms[roomCode] = {
         roomCode,
@@ -898,6 +1113,13 @@ function initializeSocket(ioInstance) {
         io.to(room.players[0].socketId).emit("joinError", {
           message: "O criador da sala não tem saldo suficiente.",
         });
+        try {
+          console.log(
+            `[${new Date().toISOString()}] [acceptBet] Removendo room ${roomCode} (creator insufficient) totalBefore=${
+              Object.keys(gameRooms).length
+            }`
+          );
+        } catch (e) {}
         delete gameRooms[roomCode];
         io.emit("updateLobby", getLobbyInfo());
         return;
@@ -924,6 +1146,11 @@ function initializeSocket(ioInstance) {
         room.disconnectTimeout = null;
       }
       socket.join(roomCode);
+      console.log(
+        `[Socket] acceptBet: socket=${socket.id} user=${
+          socket.userData?.email || "unknown"
+        } joined room=${roomCode}`
+      );
       room.players.push({ socketId: socket.id, user: socket.userData });
 
       await startGameLogic(room);
@@ -964,6 +1191,13 @@ function initializeSocket(ioInstance) {
         room.players.length === 1 &&
         room.players[0].socketId === socket.id
       ) {
+        try {
+          console.log(
+            `[${new Date().toISOString()}] [cancelRoom] Removendo room ${roomCode} requested by creator totalBefore=${
+              Object.keys(gameRooms).length
+            }`
+          );
+        } catch (e) {}
         delete gameRooms[roomCode];
         socket.emit("roomCancelled");
         io.emit("updateLobby", getLobbyInfo());
@@ -971,6 +1205,18 @@ function initializeSocket(ioInstance) {
     });
 
     socket.on("playerMove", async (moveData) => {
+      try {
+        // Atualiza socketId do jogador na sala caso ele tenha reconectado
+        const room = gameRooms[moveData.room];
+        if (room && room.players && socket.userData && socket.userData.email) {
+          const player = room.players.find(
+            (p) => p.user && p.user.email === socket.userData.email
+          );
+          if (player) player.socketId = socket.id;
+        }
+      } catch (e) {
+        console.warn("playerMove: erro ao atualizar socketId do jogador", e);
+      }
       await executeMove(
         moveData.room,
         moveData.from,
@@ -1052,6 +1298,11 @@ function initializeSocket(ioInstance) {
         if (!alreadyIn) {
           room.players.push({ socketId: socket.id, user: user });
           socket.join(roomCode);
+          console.log(
+            `[Socket] rejoinActiveGame: socket=${socket.id} user=${
+              socket.userData?.email || "unknown"
+            } rejoined room=${roomCode}`
+          );
           // Se ambos os jogadores entraram, inicia o jogo
           if (room.players.length === 2) {
             startGameLogic(room);
@@ -1144,7 +1395,11 @@ function initializeSocket(ioInstance) {
 
       if (!roomCode) {
         console.log(
-          `[Socket] disconnect: no room found for socket ${socket.id} reason=${reason}`
+          `[Socket] disconnect: no room found for socket ${
+            socket.id
+          } reason=${reason} user=${
+            socket.userData?.email || "unknown"
+          } totalRooms=${Object.keys(gameRooms).length}`
         );
         return;
       }
@@ -1213,6 +1468,13 @@ function initializeSocket(ioInstance) {
             // keep private room available for 30 minutes for sharing the code
             room.cleanupTimeout = setTimeout(() => {
               try {
+                try {
+                  console.log(
+                    `[${new Date().toISOString()}] [privateCleanup] Removendo private room ${roomCode} totalBefore=${
+                      Object.keys(gameRooms).length
+                    }`
+                  );
+                } catch (e) {}
                 delete gameRooms[roomCode];
                 if (io) io.emit("updateLobby", getLobbyInfo());
               } catch (e) {
@@ -1225,8 +1487,32 @@ function initializeSocket(ioInstance) {
             console.error("Error scheduling cleanup for private room:", e);
           }
         } else {
-          delete gameRooms[roomCode];
-          io.emit("updateLobby", getLobbyInfo());
+          // Evita deletar imediatamente salas ativas quando um jogador desconecta
+          // (p.ex. reconexão rápida pode trocar socket.id). Agendamos limpeza
+          // para 60 segundos — o mesmo tempo de espera usado para desconexões.
+          try {
+            if (room.cleanupTimeout) clearTimeout(room.cleanupTimeout);
+            room.cleanupTimeout = setTimeout(() => {
+              try {
+                if (gameRooms[roomCode]) {
+                  delete gameRooms[roomCode];
+                  if (io) io.emit("updateLobby", getLobbyInfo());
+                  console.log(
+                    `[Socket] cleanup: removed room ${roomCode} after idle timeout`
+                  );
+                }
+              } catch (e) {
+                console.error("Error cleaning up room after disconnect:", e);
+              }
+            }, WAIT_TIME * 1000);
+            // Notifica lobby que há mudança (mostra sala como aguardando/ausente)
+            if (io) io.emit("updateLobby", getLobbyInfo());
+          } catch (e) {
+            console.error(
+              "Error scheduling cleanup for room after disconnect:",
+              e
+            );
+          }
         }
       }
     });
@@ -1310,43 +1596,76 @@ function initializeSocket(ioInstance) {
         // ensure room is cleaned up in case processEndOfGame didn't delete it
         if (gameRooms[roomCode] && gameRooms[roomCode].isGameConcluded) {
           try {
-            delete gameRooms[roomCode];
-            if (io) io.emit("updateLobby", getLobbyInfo());
+            // Em vez de remover imediatamente, agendamos limpeza em 10s
+            // para evitar races com eventos de disconnect/rejoin do cliente.
+            const rm = gameRooms[roomCode];
+            try {
+              console.log(
+                `[${new Date().toISOString()}] [acceptDraw] Agendando limpeza de room ${roomCode} em 10s totalBefore=${
+                  Object.keys(gameRooms).length
+                }`
+              );
+            } catch (e) {}
+            if (rm) {
+              if (rm.cleanupTimeout) clearTimeout(rm.cleanupTimeout);
+              rm.cleanupTimeout = setTimeout(() => {
+                try {
+                  if (gameRooms[roomCode]) {
+                    // Apenas remove se a sala ainda estiver concluída (não foi reiniciada)
+                    if (gameRooms[roomCode].isGameConcluded) {
+                      delete gameRooms[roomCode];
+                      if (io) io.emit("updateLobby", getLobbyInfo());
+                      console.log(
+                        `[${new Date().toISOString()}] [acceptDraw] Removido room ${roomCode} após agendamento`
+                      );
+                    } else {
+                      console.log(
+                        `[${new Date().toISOString()}] [acceptDraw] Skip removal for room ${roomCode} because isGameConcluded=${
+                          gameRooms[roomCode].isGameConcluded
+                        }`
+                      );
+                    }
+                  }
+                } catch (e) {
+                  console.error(
+                    "Error removing room after scheduled acceptDraw cleanup:",
+                    e
+                  );
+                }
+              }, 10 * 1000);
+            }
           } catch (e) {
-            console.error("Error removing room after draw accepted:", e);
+            console.error("Error scheduling removal after draw accepted:", e);
           }
         }
       } catch (e) {
         console.error("Error handling acceptDraw:", e);
       }
     });
-
     socket.on("requestRevanche", async ({ roomCode }) => {
-      console.log(
-        `[Revanche] Requisição recebida para sala ${roomCode} do socket ${socket.id}`
-      );
-
       const room = gameRooms[roomCode];
       if (!room || !room.isGameConcluded) return;
-      const isPlayer = room.players.some((p) => p.socketId === socket.id);
-      if (!isPlayer) return;
+
+      const player = room.players.find((p) => p.socketId === socket.id);
+      if (!player) return;
 
       if (!room.revancheRequests) room.revancheRequests = new Set();
-      room.revancheRequests.add(socket.id);
-      if (room.players.length === 2 && room.revancheRequests.size === 2) {
-        const player1SocketId = room.players[0].socketId;
-        const player2SocketId = room.players[1].socketId;
+      // Usa Email em vez de Socket ID para persistência entre reconexões
+      room.revancheRequests.add(player.user.email);
+
+      if (room.players.length === 2) {
+        const p1Email = room.players[0].user.email;
+        const p2Email = room.players[1].user.email;
         if (
-          room.revancheRequests.has(player1SocketId) &&
-          room.revancheRequests.has(player2SocketId)
+          room.revancheRequests.has(p1Email) &&
+          room.revancheRequests.has(p2Email)
         ) {
           try {
             const player1 = room.players[0];
             const player2 = room.players[1];
             const bet = room.bet;
 
-            // 1. Cobrança Atômica P1
-            console.log(`[Revanche] Cobrando aposta de ${player1.user.email}`);
+            // Cobrança Atômica P1
             const p1Update = await User.findOneAndUpdate(
               { email: player1.user.email, saldo: { $gte: bet } },
               [
@@ -1358,18 +1677,23 @@ function initializeSocket(ioInstance) {
             );
 
             if (!p1Update) {
-              console.log(
-                `[Revanche] Falha na cobrança de ${player1.user.email}`
-              );
               io.to(room.roomCode).emit("revancheDeclined", {
-                message: `${player1.user.email} sem saldo suficiente.`,
+                message: "Jogador 1 sem saldo suficiente.",
               });
-              room.revancheRequests.delete(p1Email);
+              try {
+                console.log(
+                  `[${new Date().toISOString()}] [revanche] Removendo room ${
+                    room.roomCode
+                  } (p1 insufficient) totalBefore=${
+                    Object.keys(gameRooms).length
+                  }`
+                );
+              } catch (e) {}
+              delete gameRooms[room.roomCode];
               return;
             }
 
-            // 2. Cobrança Atômica P2
-            console.log(`[Revanche] Cobrando aposta de ${player2.user.email}`);
+            // Cobrança Atômica P2
             const p2Update = await User.findOneAndUpdate(
               { email: player2.user.email, saldo: { $gte: bet } },
               [
@@ -1382,171 +1706,90 @@ function initializeSocket(ioInstance) {
 
             if (!p2Update) {
               // Reembolsa P1
-              console.log(
-                `[Revanche] Falha na cobrança de ${player2.user.email}, reembolsando P1`
-              );
               await User.findOneAndUpdate({ email: player1.user.email }, [
                 { $set: { saldo: { $round: [{ $add: ["$saldo", bet] }, 2] } } },
               ]);
               io.to(room.roomCode).emit("revancheDeclined", {
-                message: `${player2.user.email} sem saldo suficiente.`,
+                message: "Jogador 2 sem saldo suficiente.",
               });
-              room.revancheRequests.delete(p2Email);
+              try {
+                console.log(
+                  `[${new Date().toISOString()}] [revanche] Removendo room ${
+                    room.roomCode
+                  } (p2 insufficient) totalBefore=${
+                    Object.keys(gameRooms).length
+                  }`
+                );
+              } catch (e) {}
+              delete gameRooms[room.roomCode];
               return;
             }
 
-            console.log(`[Revanche] Apostas processadas com sucesso`);
-
-            // --- CORREÇÃO CRÍTICA: Gera NOVA sala para revanche ---
-            const newRoomCode = `REV-${Date.now()
-              .toString(36)
-              .slice(-4)}-${Math.random()
-              .toString(36)
-              .substring(2, 4)
-              .toUpperCase()}`;
-
-            console.log(
-              `[Revanche] Criando nova sala ${newRoomCode} para revanche`
-            );
-
-            // Cria nova sala com configurações atualizadas
-            const newRoom = {
-              ...room,
-              roomCode: newRoomCode,
-              players: room.players.map((p) => ({
-                socketId: p.socketId,
-                user: { ...p.user },
-              })),
-              game: null,
-              isGameConcluded: false,
-              revancheRequests: new Set(),
-              timerInterval: null,
-              disconnectTimeout: null,
-              cleanupTimeout: null,
-              firstMoveTimeout: null,
-              spectators: new Set(),
-              drawOfferBy: null,
-              // Se for Tablita, reseta completamente o match
-              match: room.gameMode === "tablita" ? null : undefined,
-              lastOpeningIndex: -1, // Reseta para nova abertura
-            };
-
-            gameRooms[newRoomCode] = newRoom;
-
-            // --- CORREÇÃO CRÍTICA: Move TODOS os sockets para a nova sala ---
-            console.log(
-              `[Revanche] Movendo jogadores para nova sala ${newRoomCode}`
-            );
-
-            room.players.forEach((player) => {
-              const playerSocket = io.sockets.sockets.get(player.socketId);
-              if (playerSocket) {
-                // Remove da sala antiga
-                playerSocket.leave(room.roomCode);
-                // Entra na nova sala
-                playerSocket.join(newRoomCode);
-                console.log(
-                  `[Revanche] Socket ${playerSocket.id} movido para ${newRoomCode}`
-                );
-
-                // Atualiza socketId na nova sala
-                const playerInNewRoom = newRoom.players.find(
-                  (p) => p.user.email === player.user.email
-                );
-                if (playerInNewRoom) {
-                  playerInNewRoom.socketId = playerSocket.id;
-                }
-              }
-            });
-
-            // Notifica CADA jogador individualmente sobre a nova sala
-            console.log(`[Revanche] Notificando jogadores sobre nova sala`);
-            room.players.forEach((player) => {
-              const playerSocket = io.sockets.sockets.get(player.socketId);
-              if (playerSocket) {
-                playerSocket.emit("rematchAccepted", {
-                  newRoomCode,
-                  message: "Revanche iniciada!",
-                });
-                console.log(
-                  `[Revanche] Notificado ${player.user.email} sobre nova sala ${newRoomCode}`
-                );
-              }
-            });
-
-            // Inicia o jogo na NOVA sala
-            console.log(
-              `[Revanche] Iniciando jogo na nova sala ${newRoomCode}`
-            );
-            await startGameLogic(newRoom);
-
-            // --- LIMPEZA SEGURA da sala antiga ---
-            console.log(`[Revanche] Limpando sala antiga ${room.roomCode}`);
-            // Cancela todos os timeouts da sala antiga
-            if (room.timerInterval) clearInterval(room.timerInterval);
-            if (room.disconnectTimeout) clearTimeout(room.disconnectTimeout);
-            if (room.cleanupTimeout) clearTimeout(room.cleanupTimeout);
-            if (room.firstMoveTimeout) clearTimeout(room.firstMoveTimeout);
-
-            // Remove a sala antiga
-            delete gameRooms[room.roomCode];
-
-            // Atualiza lobby
-            io.emit("updateLobby", getLobbyInfo());
-
-            console.log(
-              `[Revanche] Revanche concluída com sucesso! Nova sala: ${newRoomCode}`
-            );
-          } catch (err) {
-            console.error("[Revanche] Erro ao processar revanche:", err);
-            io.to(room.roomCode).emit("revancheDeclined", {
-              message: "Erro ao processar a revanche. Tente novamente.",
-            });
-            // Limpa a sala em caso de erro
-            if (gameRooms[room.roomCode]) {
-              delete gameRooms[room.roomCode];
+            // Avisa clientes que a revanche foi aceita (para eles cancelarem timers UI)
+            try {
+              if (player1.socketId)
+                io.to(player1.socketId).emit("revancheAccepted");
+              if (player2.socketId)
+                io.to(player2.socketId).emit("revancheAccepted");
+            } catch (e) {
+              console.error("Erro emitindo revancheAccepted:", e);
             }
+
+            // Limpa pedidos pendentes para evitar races com spectate/limpeza
+            try {
+              room.revancheRequests = new Set();
+            } catch (e) {}
+
+            // FIX: Reset match state for Tablita to force new opening on rematch
+            if (room.gameMode === "tablita") {
+              room.match = null;
+            }
+
+            await startGameLogic(room);
+          } catch (err) {
+            console.error(err);
+            io.to(room.roomCode).emit("revancheDeclined", {
+              message: "Erro ao processar a aposta da revanche.",
+            });
+            try {
+              console.log(
+                `[${new Date().toISOString()}] [revanche] Removendo room ${
+                  room.roomCode
+                } (error) totalBefore=${Object.keys(gameRooms).length}`
+              );
+            } catch (e) {}
+            delete gameRooms[room.roomCode];
           }
-        } else {
-          console.log(`[Revanche] Aguardando aceitação do outro jogador`);
-          // Ainda não temos ambos os jogadores
-          socket.emit("revancheRequestSent");
         }
       }
     });
-
     socket.on("leaveEndGameScreen", ({ roomCode }) => {
       const room = gameRooms[roomCode];
-      if (!room) return;
+      // Proteção CRÍTICA: Só processa saída se o jogo REALMENTE estiver concluído.
+      // Isso evita que o timeout de 5s da revanche mate um jogo que acabou de começar.
+      if (!room || !room.isGameConcluded) return;
 
       const playerWhoLeft = room.players.find((p) => p.socketId === socket.id);
       if (playerWhoLeft) {
-        console.log(
-          `[LeaveEndGame] Jogador ${playerWhoLeft.user.email} saindo da sala ${roomCode}`
-        );
-
-        // Remove solicitação de revanche deste jogador
-        if (room.revancheRequests) {
-          room.revancheRequests.delete(playerWhoLeft.user.email);
-        }
-
         room.players = room.players.filter((p) => p.socketId !== socket.id);
         if (room.players.length === 1) {
           const opponent = room.players[0];
           if (opponent) {
-            console.log(
-              `[LeaveEndGame] Notificando oponente ${opponent.user.email} sobre saída`
-            );
             io.to(opponent.socketId).emit("revancheDeclined", {
               message: "O seu oponente saiu.",
             });
           }
         }
         if (room.players.length === 0) {
-          console.log(`[LeaveEndGame] Sala ${roomCode} vazia, removendo`);
           if (room.cleanupTimeout) clearTimeout(room.cleanupTimeout);
+          try {
+            console.log(
+              `[${new Date().toISOString()}] [leaveEndGameScreen] Removendo room ${roomCode} (empty after leave) totalBefore=${
+                Object.keys(gameRooms).length
+              }`
+            );
+          } catch (e) {}
           delete gameRooms[roomCode];
-          io.emit("updateLobby", getLobbyInfo());
         }
       } else {
         // If non-player leaving (likely spectator), remove from spectators set
@@ -1558,6 +1801,23 @@ function initializeSocket(ioInstance) {
         }
         socket.leave(roomCode);
       }
+
+      // If still not found, try to locate by user email (handles races where socketId changed)
+      if (!roomCode && socket.userData && socket.userData.email) {
+        try {
+          const email = socket.userData.email;
+          roomCode = Object.keys(gameRooms).find((rc) =>
+            gameRooms[rc].players.some((p) => p.user && p.user.email === email)
+          );
+          if (roomCode) {
+            console.log(
+              `[Socket] disconnect: located room by email for socket=${socket.id} email=${email} room=${roomCode}`
+            );
+          }
+        } catch (e) {
+          console.error("Error finding room by email on disconnect:", e);
+        }
+      }
     });
   });
 }
@@ -1566,4 +1826,5 @@ module.exports = {
   initializeSocket,
   gameRooms,
   startNextTablitaGame,
+  startGameLogic,
 };

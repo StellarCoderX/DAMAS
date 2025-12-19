@@ -165,6 +165,20 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
         moveHistory: room.game.moveHistory,
         initialBoardState: room.game.initialBoardState,
       });
+      // Forçar retorno ao lobby do vencedor (se conectado)
+      if (winnerData && winnerData.socketId) {
+        try {
+          const s = io.sockets.sockets.get(winnerData.socketId);
+          if (s) s.emit("forceReturnToLobby");
+        } catch (e) {}
+      }
+      // Se houver um jogador perdedor conectado, forçar retorno ao lobby
+      if (loserData && loserData.socketId) {
+        try {
+          const s = io.sockets.sockets.get(loserData.socketId);
+          if (s) s.emit("forceReturnToLobby");
+        } catch (e) {}
+      }
     }
 
     if (tournamentManager) {
@@ -228,6 +242,17 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
           const winnerSocket = io.sockets.sockets.get(winnerData.socketId);
           if (winnerSocket && updatedWinner) {
             winnerSocket.emit("updateSaldo", { newSaldo: updatedWinner.saldo });
+          }
+
+          // Forçar retorno ao lobby do perdedor (se conectado)
+          const loserData = room.players.find(
+            (p) => p.socketId !== winnerData.socketId
+          );
+          if (loserData && loserData.socketId) {
+            try {
+              const s = io.sockets.sockets.get(loserData.socketId);
+              if (s) s.emit("forceReturnToLobby");
+            } catch (e) {}
           }
 
           await saveMatchHistory(room, winnerData.user.email, reason);
@@ -306,6 +331,30 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
       } catch (err) {
         console.error("Erro ao pagar prêmio Tablita:", err);
       }
+      // Notificar perdedor para retornar ao lobby
+      try {
+        const loserEmail =
+          finalWinnerData.email === room.match.player1.email
+            ? room.match.player2.email
+            : room.match.player1.email;
+        const loserPlayer = room.players.find(
+          (p) => p.user.email === loserEmail
+        );
+        if (loserPlayer && loserPlayer.socketId) {
+          const s = io.sockets.sockets.get(loserPlayer.socketId);
+          if (s) s.emit("forceReturnToLobby");
+        }
+      } catch (e) {}
+      // Forçar retorno ao lobby do vencedor também
+      try {
+        const winnerPlayer = room.players.find(
+          (p) => p.user.email === finalWinnerData.email
+        );
+        if (winnerPlayer && winnerPlayer.socketId) {
+          const s2 = io.sockets.sockets.get(winnerPlayer.socketId);
+          if (s2) s2.emit("forceReturnToLobby");
+        }
+      } catch (e) {}
     } else {
       // Empate no placar geral (ex: 1 a 1 ou 0 a 0)
       try {

@@ -4,9 +4,10 @@ const MatchHistory = require("../models/MatchHistory"); // <--- IMPORTANTE: Adic
 
 // Configurações
 const MIN_PLAYERS = 4;
+const MAX_PLAYERS = 4; // Limite máximo de inscritos
 const ENTRY_FEE = 2.0;
-const TOURNAMENT_HOUR = 21;
-const TOURNAMENT_MINUTE = 0;
+const TOURNAMENT_HOUR = 0;
+const TOURNAMENT_MINUTE = 8;
 
 let io; // Referência ao Socket.IO
 let gameRooms; // Referência aos quartos de jogo (Injeção de Dependência)
@@ -88,6 +89,10 @@ async function registerPlayer(email) {
       success: false,
       message: "Inscrições encerradas ou torneio em andamento.",
     };
+  }
+  // Bloqueia se já atingiu o limite máximo de inscritos
+  if (tournamentCheck.participants.length >= MAX_PLAYERS) {
+    return { success: false, message: "Torneio cheio. Inscrições encerradas." };
   }
   if (tournamentCheck.participants.includes(email)) {
     return { success: false, message: "Você já está inscrito." };
@@ -278,53 +283,13 @@ async function startTournament(tournament) {
     Array.from(onlineEmails)
   );
 
+  // Usaremos todos os inscritos (mesmo ausentes) para criar os pares
   const originalParticipants = [...tournament.participants];
-  const presentPlayers = [];
-  const absentPlayers = [];
 
-  originalParticipants.forEach((email) => {
-    if (onlineEmails.has(email)) {
-      presentPlayers.push(email);
-    } else {
-      absentPlayers.push(email);
-    }
-  });
-
-  // W.O. para ausentes
-  if (absentPlayers.length > 0) {
-    console.log(
-      `[Torneio] ${absentPlayers.length} jogadores ausentes. W.O. aplicado.`
-    );
-    // Atualiza a lista de participantes no banco
-    tournament.participants = presentPlayers;
-    await tournament.save();
-
-    io.emit("tournamentUpdate", {
-      participantsCount: tournament.participants.length,
-      prizePool: tournament.prizePool,
-    });
-  }
-
-  if (tournament.participants.length < MIN_PLAYERS) {
-    console.log(
-      `[Torneio] Cancelado: Apenas ${tournament.participants.length} jogadores online. Mínimo: ${MIN_PLAYERS}.`
-    );
-    // Reutiliza a função de cancelamento que já faz o reembolso correto E O HISTÓRICO
-    await cancelTournamentAndRefund(
-      tournament,
-      `Quórum insuficiente (Mínimo ${MIN_PLAYERS}).`
-    );
-    return;
-  }
-
-  console.log(
-    "[Torneio] Iniciando com " +
-      tournament.participants.length +
-      " jogadores presentes."
-  );
+  console.log("[Torneio] Iniciando com inscritos: ", originalParticipants);
   tournament.status = "active";
 
-  const shuffled = tournament.participants.sort(() => 0.5 - Math.random());
+  const shuffled = originalParticipants.sort(() => 0.5 - Math.random());
 
   const matches = [];
   for (let i = 0; i < shuffled.length; i += 2) {
@@ -364,19 +329,61 @@ async function processRoundMatches(tournament) {
       match.status = "active";
 
       if (gameRooms) {
+        // Preenche a lista de players com sockets online quando possível.
+        const sockets = await io.fetchSockets();
+        const emailToSocket = {};
+        sockets.forEach((s) => {
+          if (s.userData && s.userData.email)
+            emailToSocket[s.userData.email] = s.id;
+        });
+
+        const playersPlaceholders = [match.player1, match.player2].map(
+          (email) => {
+            return { socketId: emailToSocket[email] || null, user: { email } };
+          }
+        );
+
         gameRooms[roomCode] = {
           roomCode,
           bet: 0,
           gameMode: "classic",
           timeControl: "move",
           timerDuration: 7, // 7 segundos por jogada
-          players: [],
+          players: playersPlaceholders,
           isTournament: true,
           matchId: match.matchId,
           tournamentId: tournament._id,
           isGameConcluded: false,
           expectedPlayers: [match.player1, match.player2],
         };
+
+        console.log(
+          `[DEBUG tournament] criada sala ${roomCode} para match=${
+            match.matchId
+          } players=${playersPlaceholders.map((p) => p.user.email).join(",")}`
+        );
+
+        // Se sockets estão online, faça com que entrem na sala para receber eventos
+        try {
+          const room = gameRooms[roomCode];
+          for (const p of room.players) {
+            if (p.socketId) {
+              const s = io.sockets.sockets.get(p.socketId);
+              if (s) {
+                try {
+                  s.join(roomCode);
+                } catch (e) {}
+                // Preenche dados do usuário a partir do socket quando disponíveis
+                if (s.userData) p.user = s.userData;
+              } else {
+                // socket desconectado entre fetchSockets e agora
+                p.socketId = null;
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Erro ao juntar sockets à sala do torneio:", e);
+        }
 
         io.emit("tournamentMatchReady", {
           matchId: match.matchId,
@@ -385,26 +392,26 @@ async function processRoundMatches(tournament) {
           roomCode: roomCode,
         });
 
-        // Timeout para W.O. se alguém não entrar na sala
-        setTimeout(async () => {
+        // Iniciamos a sala e o jogo mesmo que os jogadores não estejam conectados.
+        // O jogo será iniciado pelo servidor chamando a lógica de jogo diretamente,
+        // permitindo que ausentes sejam tratados por timeout/auto-pass na camada
+        // do jogo (`scheduleTurnInactivity`).
+        try {
+          // Start game immediately (placeholders com socketId === null são permitidos)
           const room = gameRooms[roomCode];
-          if (room && !room.isGameConcluded && room.players.length < 2) {
-            console.log(`[Torneio] Sala ${roomCode} expirou. Aplicando W.O.`);
-
-            const p1 = match.player1;
-            const p2 = match.player2;
-            const joined = room.players.map((p) => p.user.email);
-
-            let winner = null;
-            if (joined.includes(p1) && !joined.includes(p2)) winner = p1;
-            else if (joined.includes(p2) && !joined.includes(p1)) winner = p2;
-            else winner = Math.random() < 0.5 ? p1 : p2; // Sorteio se ambos faltarem
-
-            await handleTournamentGameEnd(winner, null, room);
-
-            if (gameRooms[roomCode]) delete gameRooms[roomCode];
+          if (room) {
+            // Import dinâmico para evitar dependência circular
+            const { startGameLogic } = require("./socketHandlers");
+            if (startGameLogic) {
+              console.log(
+                `[DEBUG tournament] chamando startGameLogic para sala ${roomCode}`
+              );
+              startGameLogic(room);
+            }
           }
-        }, 60 * 1000); // 60 segundos para entrar
+        } catch (e) {
+          console.error("Erro iniciando partida de torneio:", e);
+        }
       } else {
         console.error(
           "[Torneio] CRÍTICO: gameRooms não definido no processRoundMatches"
@@ -434,6 +441,35 @@ async function handleTournamentGameEnd(winnerEmail, loserEmail, room) {
     console.log(
       `[Torneio] Partida ${room.matchId} finalizada por W.O. Vencedor: ${winnerEmail}`
     );
+    checkRoundCompletion(tournament);
+    return;
+  }
+
+  // Caso especial: ambos forfeitaram (nenhum movimento) — marcar como finalizado sem vencedor
+  if (winnerEmail === "BOTH_FORFEIT") {
+    tournament.matches[matchIndex].winner = null;
+    tournament.matches[matchIndex].status = "finished";
+    await tournament.save();
+    console.log(
+      `[Torneio] Partida ${room.matchId} finalizada: Ambos desistiram por inatividade.`
+    );
+    io.emit("tournamentMatchEnded", {
+      matchId: room.matchId,
+      reason: "Ambos ausentes: desclassificados.",
+    });
+    // Forçar retorno ao lobby dos jogadores conectados (se houver socketId)
+    try {
+      if (room && room.players && room.players.length > 0) {
+        for (const p of room.players) {
+          if (p && p.socketId) {
+            try {
+              const s = io.sockets.sockets.get(p.socketId);
+              if (s) s.emit("forceReturnToLobby");
+            } catch (e) {}
+          }
+        }
+      }
+    } catch (e) {}
     checkRoundCompletion(tournament);
     return;
   }

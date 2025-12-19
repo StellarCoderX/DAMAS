@@ -5,6 +5,39 @@ document.addEventListener("DOMContentLoaded", () => {
   UI.init();
 
   const socket = io({ autoConnect: false });
+  // --- DEBUG: registrar eventos importantes para envio ao suporte ---
+  window.__CLIENT_DEBUG = true; // defina false se quiser silenciar
+  window.setClientDebug = function (v) {
+    window.__CLIENT_DEBUG = !!v;
+    console.info("Client debug:", window.__CLIENT_DEBUG);
+  };
+  const __debugEvents = [
+    "connect",
+    "disconnect",
+    "updateLobby",
+    "tournamentUpdate",
+    "tournamentStarted",
+    "tournamentMatchReady",
+    "tournamentRoundUpdate",
+    "tournamentMatchEnded",
+    "tournamentTieBreak",
+    "gameStart",
+    "gameStateUpdate",
+    "turnPassedDueToInactivity",
+    "gameOver",
+    "gameDraw",
+    "forceReturnToLobby",
+    "revancheAccepted",
+    "revancheDeclined",
+    "invalidMove",
+  ];
+  __debugEvents.forEach((ev) => {
+    socket.on(ev, (payload) => {
+      try {
+        if (window.__CLIENT_DEBUG) console.log(`[DEBUG socket:${ev}]`, payload);
+      } catch (e) {}
+    });
+  });
   const isGamePage = window.location.pathname.includes("jogo.html");
 
   // --- Ping indicator (RTT) ---
