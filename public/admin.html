@@ -373,29 +373,7 @@
 
       <!-- COLUNA DA DIREITA (TESTES) -->
       <div>
-        <!-- CARD DE PERSONALIZAÇÃO VISUAL -->
-        <div class="card" style="margin-bottom: 20px;">
-          <h3><i class="fa-solid fa-palette"></i> Personalizar Visual</h3>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-            <div>
-              <label style="font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 5px;">Borda (px)</label>
-              <input type="number" id="cust-border-size" value="2" min="0" max="50">
-            </div>
-            <div>
-              <label style="font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 5px;">Cor da Borda</label>
-              <input type="color" id="cust-border-color" value="#8d6e63"
-                style="width: 100%; height: 42px; padding: 2px; background: transparent; border: 1px solid #334155;">
-            </div>
-            <div style="grid-column: span 2;">
-              <label style="font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 5px;">Tamanho do Tabuleiro
-                (%)</label>
-              <input type="range" id="cust-board-scale" value="100" min="50" max="100"
-                style="width: 100%; cursor: pointer;">
-            </div>
-          </div>
-          <button id="apply-customization-btn" class="btn-login"
-            style="font-size: 0.9rem; background: var(--info);">Aplicar Alterações</button>
-        </div>
+        <!-- Personalização Visual removida -->
 
         <div class="card">
           <h3><i class="fa-solid fa-chess-board"></i> Ferramentas de Teste</h3>
@@ -438,26 +416,7 @@
   <!-- Scripts -->
   <script src="js/gameLogic.js?v=10"></script>
   <script src="js/admin.js?v=10"></script>
-  <script>
-    // Script para Personalização Visual (Admin)
-    document.addEventListener('DOMContentLoaded', () => {
-      const btnApply = document.getElementById('apply-customization-btn');
-      const board = document.getElementById('board');
-      const scaleInput = document.getElementById('cust-board-scale');
-
-      if (btnApply && board) {
-        btnApply.addEventListener('click', () => {
-          const borderSize = document.getElementById('cust-border-size').value;
-          const borderColor = document.getElementById('cust-border-color').value;
-          board.style.cssText += `; border: ${borderSize}px solid ${borderColor} !important;`;
-        });
-
-        scaleInput.addEventListener('input', (e) => {
-          board.style.width = `${e.target.value}%`;
-        });
-      }
-    });
-  </script>
+  <!-- Personalização visual removida -->
 </body>
 
 </html>
