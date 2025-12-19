@@ -219,8 +219,14 @@ app.post("/api/user/history", async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: "Email obrigatório." });
+    const emailLower = email.toLowerCase();
+    // Retornar apenas partidas das últimas 24 horas
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const history = await MatchHistory.find({
-      $or: [{ player1: email.toLowerCase() }, { player2: email.toLowerCase() }],
+      $and: [
+        { createdAt: { $gte: cutoff } },
+        { $or: [{ player1: emailLower }, { player2: emailLower }] },
+      ],
     })
       .sort({ createdAt: -1 })
       .limit(50);
@@ -229,6 +235,27 @@ app.post("/api/user/history", async (req, res) => {
     res.status(500).json({ message: "Erro." });
   }
 });
+
+// Job: limpar histórico mais antigo que 24 horas (executa a cada hora)
+try {
+  setInterval(async () => {
+    try {
+      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const result = await MatchHistory.deleteMany({
+        createdAt: { $lt: cutoff },
+      });
+      if (result && result.deletedCount && result.deletedCount > 0) {
+        console.log(
+          `[cleanup] Deleted ${result.deletedCount} old history records older than 24h`
+        );
+      }
+    } catch (e) {
+      console.error("[cleanup] Error deleting old match history:", e);
+    }
+  }, 1000 * 60 * 60);
+} catch (e) {
+  console.warn("Could not schedule history cleanup job:", e);
+}
 
 // Rota para limpar histórico do usuário
 app.delete("/api/user/history", async (req, res) => {
