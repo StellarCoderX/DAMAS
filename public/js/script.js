@@ -464,7 +464,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (sc && scn) {
           scn.textContent = String(payload.spectatorCount || 0);
           sc.classList.remove("hidden");
-          sc.style.display = "flex";
+          sc.classList.add("show");
         }
       }
     } catch (e) {}
@@ -478,10 +478,10 @@ document.addEventListener("DOMContentLoaded", () => {
       scn.textContent = String(data.count || 0);
       if (data.count && data.count > 0) {
         sc.classList.remove("hidden");
-        sc.style.display = "flex";
+        sc.classList.add("show");
       } else {
+        sc.classList.remove("show");
         sc.classList.add("hidden");
-        sc.style.display = "none";
       }
     } catch (e) {}
   });
