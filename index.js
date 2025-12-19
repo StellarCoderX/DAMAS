@@ -230,6 +230,26 @@ app.post("/api/user/history", async (req, res) => {
   }
 });
 
+// Rota para limpar histórico do usuário
+app.delete("/api/user/history", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "Email obrigatório." });
+    const emailLower = email.toLowerCase();
+    // Deleta entradas em que o usuário participou
+    const result = await MatchHistory.deleteMany({
+      $or: [{ player1: emailLower }, { player2: emailLower }],
+    });
+    return res.json({
+      message: "Histórico limpo.",
+      deletedCount: result.deletedCount,
+    });
+  } catch (err) {
+    console.error("Erro ao limpar histórico:", err);
+    return res.status(500).json({ message: "Erro ao limpar histórico." });
+  }
+});
+
 // --- ROTAS DE PREFERÊNCIAS DO USUÁRIO ---
 app.get("/api/user/preferences", async (req, res) => {
   try {

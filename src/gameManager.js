@@ -332,29 +332,11 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
         console.error("Erro ao pagar prêmio Tablita:", err);
       }
       // Notificar perdedor para retornar ao lobby
-      try {
-        const loserEmail =
-          finalWinnerData.email === room.match.player1.email
-            ? room.match.player2.email
-            : room.match.player1.email;
-        const loserPlayer = room.players.find(
-          (p) => p.user.email === loserEmail
-        );
-        if (loserPlayer && loserPlayer.socketId) {
-          const s = io.sockets.sockets.get(loserPlayer.socketId);
-          if (s) s.emit("forceReturnToLobby");
-        }
-      } catch (e) {}
-      // Forçar retorno ao lobby do vencedor também
-      try {
-        const winnerPlayer = room.players.find(
-          (p) => p.user.email === finalWinnerData.email
-        );
-        if (winnerPlayer && winnerPlayer.socketId) {
-          const s2 = io.sockets.sockets.get(winnerPlayer.socketId);
-          if (s2) s2.emit("forceReturnToLobby");
-        }
-      } catch (e) {}
+      // Não forçamos retorno ao lobby aqui para partidas do modo Tablita.
+      // Deixamos o `room.isGameConcluded = true` e emitimos o evento `gameOver`
+      // acima — o cliente mostrará a tela de fim de jogo com a opção de revanche.
+      // A sala será removida automaticamente pelo `cleanupTimeout` abaixo após 60s
+      // se os jogadores não aceitarem a revanche ou saírem.
     } else {
       // Empate no placar geral (ex: 1 a 1 ou 0 a 0)
       try {

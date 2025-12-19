@@ -1094,6 +1094,35 @@ window.initLobby = function (socket, UI) {
       document.getElementById("history-overlay").classList.add("hidden")
     );
 
+  const clearHistoryBtn = document.getElementById("clear-history-btn");
+  if (clearHistoryBtn) {
+    clearHistoryBtn.addEventListener("click", async () => {
+      if (!window.currentUser)
+        return alert("Faça login para limpar o histórico.");
+      if (
+        !confirm(
+          "Deseja realmente limpar seu histórico de partidas? Esta ação não pode ser desfeita."
+        )
+      )
+        return;
+      try {
+        const res = await fetch("/api/user/history", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: window.currentUser.email }),
+        });
+        if (!res.ok) throw new Error("Erro ao limpar histórico.");
+        const j = await res.json();
+        const list = document.getElementById("history-list");
+        if (list) list.innerHTML = "<p>Histórico limpo.</p>";
+        alert(j.message || "Histórico limpo.");
+      } catch (e) {
+        console.error(e);
+        alert("Falha ao limpar histórico.");
+      }
+    });
+  }
+
   // Adicionando a função createVisualPrefsUI para evitar erros de referência
   function createVisualPrefsUI() {
     console.log("createVisualPrefsUI foi chamada.");
