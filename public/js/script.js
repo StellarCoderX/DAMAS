@@ -578,9 +578,22 @@ document.addEventListener("DOMContentLoaded", () => {
     // payload: { gameState, whiteTime?, blackTime?, timeLeft?, timeControl?, isSpectator: true }
     // spectator payload recebido
 
+    // Persistir intenção de spectate para que, em caso de refresh,
+    // o cliente saiba que deve reentrar como espectador (não como jogador).
+    try {
+      if (payload && payload.gameState && payload.gameState.roomCode) {
+        localStorage.setItem("spectateRoom", payload.gameState.roomCode);
+        localStorage.setItem("spectatePending", "1");
+      }
+    } catch (e) {}
+
     if (!isGamePage) {
-      if (payload && payload.gameState && payload.gameState.roomCode)
-        localStorage.setItem("checkersCurrentRoom", payload.gameState.roomCode);
+      if (payload && payload.gameState && payload.gameState.roomCode) {
+        try {
+          localStorage.setItem("spectateRoom", payload.gameState.roomCode);
+          localStorage.setItem("spectatePending", "1");
+        } catch (e) {}
+      }
       window.location.href = "/jogo.html";
       return;
     }
