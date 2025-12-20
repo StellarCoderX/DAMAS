@@ -385,6 +385,19 @@ function sendGameState(roomCode, fullState, opts = {}) {
 
 async function startGameLogic(room) {
   if (!io) return;
+  // Limpamos timeouts/contadores pendentes antes de iniciar um novo jogo
+  try {
+    if (room.turnInactivityTimeout) {
+      clearTimeout(room.turnInactivityTimeout);
+      room.turnInactivityTimeout = null;
+    }
+    if (room.firstMoveTimeout) {
+      clearTimeout(room.firstMoveTimeout);
+      room.firstMoveTimeout = null;
+    }
+    // Reset contador de auto-pass para evitar transportar estados da partida anterior
+    room._autoPassCount = 0;
+  } catch (e) {}
   const player1 = room.players[0];
   const player2 = room.players[1];
   room.isGameConcluded = false;
