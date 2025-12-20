@@ -518,14 +518,75 @@ window.initLobby = function (socket, UI) {
   // --- STATUS TORNEIO (GLOBAL) ---
   window.updateTournamentStatus = async function () {
     const today = new Date().toLocaleDateString();
-
     const isCancelled = localStorage.getItem(`tournament_cancelled_${today}`);
     if (isCancelled === "true") {
       const body = document.querySelector(".tournament-body");
       if (body) {
-        body.innerHTML = `<div class="cancelled-status"><i class="fa-solid fa-ban"></i><p>CANCELADO HOJE</p><small>Insuficiência de jogadores</small></div>`;
+        // Verifica se existe um horário até quando o cancelamento vigora
+        const untilIso = localStorage.getItem("tournament_cancelled_until");
+        let untilText = "";
+        let untilDate = null;
+        try {
+          if (untilIso) {
+            untilDate = new Date(untilIso);
+            const hh = String(untilDate.getHours()).padStart(2, "0");
+            const mm = String(untilDate.getMinutes()).padStart(2, "0");
+            untilText = `Reabre automaticamente às ${hh}:${mm}`;
+          } else {
+            untilText = "Reabertura automática às 01:00";
+          }
+        } catch (e) {
+          untilText = "Reabertura automática às 01:00";
+        }
+
+        body.innerHTML = `
+          <div class="cancelled-status"><i class="fa-solid fa-ban"></i>
+            <p style="font-weight:800;">TORNEIO CANCELADO</p>
+            <small>Motivo: Insuficiência de jogadores</small>
+            <div style="margin-top:8px; color:#9ae6b4; font-weight:bold;">${untilText}</div>
+          </div>`;
       }
+
+      // Desabilita botão de inscrição até o horário
+      try {
+        const joinBtn = document.getElementById("join-tournament-btn");
+        if (joinBtn) {
+          joinBtn.disabled = true;
+          joinBtn.textContent = "Torneio cancelado";
+        }
+      } catch (e) {}
+
       stopTournamentTimer();
+
+      // Se houver uma data de reabertura, agenda limpeza quando passar
+      try {
+        const untilIso = localStorage.getItem("tournament_cancelled_until");
+        if (untilIso) {
+          const until = new Date(untilIso);
+          const now = new Date();
+          if (now >= until) {
+            // passou do horário: limpa flags e atualiza
+            localStorage.removeItem(`tournament_cancelled_${today}`);
+            localStorage.removeItem("tournament_cancelled_until");
+            // chama atualização para reabrir inscrições
+            return window.updateTournamentStatus();
+          }
+
+          // agenda verificação para quando atingir o horário (usando setTimeout)
+          const ms = until.getTime() - now.getTime();
+          if (ms > 0) {
+            setTimeout(() => {
+              try {
+                localStorage.removeItem(`tournament_cancelled_${today}`);
+                localStorage.removeItem("tournament_cancelled_until");
+                if (window.updateTournamentStatus)
+                  window.updateTournamentStatus();
+              } catch (e) {}
+            }, ms + 1000);
+          }
+        }
+      } catch (e) {}
+
       return;
     }
 

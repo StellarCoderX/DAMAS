@@ -45,26 +45,68 @@ window.UI = {
       captureSound: document.getElementById("capture-sound"),
       joinSound: document.getElementById("join-sound"),
     };
+    // Estado e buffers para reprodução robusta (AudioContext fallback)
+    this.audioCtx = null;
+    this._decodedAudioBuffers = {};
+    this._soundReady = {};
 
-    // Tentativa de desbloquear áudio em navegadores que bloqueiam autoplay:
-    // Ao primeiro clique do usuário, reproduz brevemente o som (ou tenta)
-    // para permitir futuras reproduções sem erro.
+    // Preload básico e flag de readiness para cada elemento de áudio
     try {
+      [
+        ["join", this.elements.joinSound],
+        ["move", this.elements.moveSound],
+        ["capture", this.elements.captureSound],
+      ].forEach(([key, el]) => {
+        if (!el) return;
+        try {
+          el.preload = "auto";
+          const onReady = () => {
+            try {
+              this._soundReady[key] = true;
+            } catch (e) {}
+          };
+          el.addEventListener("canplaythrough", onReady, { once: true });
+        } catch (e) {}
+      });
+    } catch (e) {}
+
+    // Desbloqueio de áudio: cria/resume AudioContext no primeiro clique
+    try {
+      const self = this;
       const unlock = async () => {
         try {
-          const s = this.elements.joinSound || this.elements.moveSound;
-          if (s) {
-            s.volume = s.volume || 0.8;
-            await s.play();
-            s.pause();
-            s.currentTime = 0;
+          if (!self.audioCtx) {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (Ctx) self.audioCtx = new Ctx();
           }
-        } catch (e) {
-          // silêncio: se não conseguir reproduzir, continua sem quebrar
-        }
+          if (self.audioCtx && self.audioCtx.state === "suspended") {
+            await self.audioCtx.resume();
+          }
+
+          // Tenta pré-decodificar o join sound para fallback via WebAudio
+          const el = self.elements.joinSound || self.elements.moveSound;
+          if (el && el.src) {
+            try {
+              const src = el.src;
+              if (!self._decodedAudioBuffers[src]) {
+                const resp = await fetch(src, { cache: "no-cache" });
+                const arr = await resp.arrayBuffer();
+                if (self.audioCtx && self.audioCtx.decodeAudioData) {
+                  const buf = await new Promise((res, rej) => {
+                    self.audioCtx.decodeAudioData(arr, res, rej);
+                  });
+                  self._decodedAudioBuffers[src] = buf;
+                }
+              }
+            } catch (e) {}
+          }
+        } catch (e) {}
       };
       document.body.addEventListener("click", unlock, { once: true });
     } catch (e) {}
+    // Controle de taxa para evitar reproduções muito rápidas
+    this._lastPlayed = {};
+    this._minIntervalMs = { join: 1000, move: 200, capture: 200 };
   },
 
   // --- FEEDBACK TÁTIL (VIBRAÇÃO) ---
@@ -577,16 +619,88 @@ window.UI = {
   },
 
   playAudio: function (type) {
-    let sound;
-    if (type === "capture") sound = this.elements.captureSound;
-    else if (type === "join") sound = this.elements.joinSound;
-    else sound = this.elements.moveSound;
+    const self = this;
+    let soundEl;
+    // Rate-limit: evita tocar o mesmo som repetidamente em curto espaço
+    try {
+      const key =
+        type === "capture" ? "capture" : type === "join" ? "join" : "move";
+      const min = (this._minIntervalMs && this._minIntervalMs[key]) || 400;
+      const last = (this._lastPlayed && this._lastPlayed[key]) || 0;
+      const now = Date.now();
+      if (now - last < min) return; // muito cedo para tocar novamente
+      this._lastPlayed = this._lastPlayed || {};
+      this._lastPlayed[key] = now;
+    } catch (e) {}
+    if (type === "capture") soundEl = this.elements.captureSound;
+    else if (type === "join") soundEl = this.elements.joinSound;
+    else soundEl = this.elements.moveSound;
 
-    if (sound) {
-      sound.currentTime = 0;
-      sound.play().catch(() => {});
-      this.triggerHaptic();
-    }
+    this.triggerHaptic();
+
+    const tryPlayElement = async (el) => {
+      if (!el) return false;
+      try {
+        el.muted = false;
+        el.volume = el.volume || 0.8;
+        el.currentTime = 0;
+        await el.play();
+        return true;
+      } catch (e) {
+        return false;
+      }
+    };
+
+    const playViaAudioContext = async (el) => {
+      try {
+        if (!self.audioCtx) {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (!Ctx) return false;
+          self.audioCtx = new Ctx();
+        }
+        if (self.audioCtx.state === "suspended") {
+          try {
+            await self.audioCtx.resume();
+          } catch (e) {}
+        }
+
+        let src = (el && el.src) || null;
+        if (!src) return false;
+        let buffer =
+          self._decodedAudioBuffers && self._decodedAudioBuffers[src];
+        if (!buffer) {
+          const resp = await fetch(src, { cache: "no-cache" });
+          const arr = await resp.arrayBuffer();
+          buffer = await new Promise((res, rej) => {
+            self.audioCtx.decodeAudioData(arr, res, rej);
+          });
+          self._decodedAudioBuffers = self._decodedAudioBuffers || {};
+          self._decodedAudioBuffers[src] = buffer;
+        }
+        const bs = self.audioCtx.createBufferSource();
+        bs.buffer = buffer;
+        bs.connect(self.audioCtx.destination);
+        bs.start(0);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    };
+
+    (async () => {
+      // 1) Tenta diretamente no elemento (rápido)
+      if (await tryPlayElement(soundEl)) return;
+
+      // 2) Retentar algumas vezes brevemente (caso de carregamento lento)
+      const RETRIES = 3;
+      for (let i = 0; i < RETRIES; i++) {
+        await new Promise((r) => setTimeout(r, 150));
+        if (await tryPlayElement(soundEl)) return;
+      }
+
+      // 3) Fallback: WebAudio (decodificado) se disponível
+      if (await playViaAudioContext(soundEl)) return;
+    })();
   },
 
   updatePlayerNames: function (users) {

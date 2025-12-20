@@ -829,6 +829,14 @@ document.addEventListener("DOMContentLoaded", () => {
   socket.on("tournamentCancelled", () => {
     const today = new Date().toLocaleDateString();
     localStorage.setItem(`tournament_cancelled_${today}`, "true");
+    try {
+      // Define reabertura automática para 01:00 do dia seguinte
+      const now = new Date();
+      const reopen = new Date(now);
+      reopen.setDate(now.getDate() + 1);
+      reopen.setHours(1, 0, 0, 0);
+      localStorage.setItem("tournament_cancelled_until", reopen.toISOString());
+    } catch (e) {}
     if (window.updateTournamentStatus) window.updateTournamentStatus();
     if (window.currentUser) window.location.reload();
   });
