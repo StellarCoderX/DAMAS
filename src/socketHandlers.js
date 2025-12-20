@@ -22,6 +22,7 @@ const {
   startTimer,
   resetTimer,
   processEndOfGame,
+  safeProcessEndOfGame,
   initializeManager,
 } = require("./gameManager");
 
@@ -157,14 +158,19 @@ function scheduleTurnInactivity(roomCode) {
         // Se o jogo tem timer ativo (modo com limite por jogada/partida),
         // a inatividade deve resultar em perda por tempo — não apenas passar a vez.
         if (
-          (r.game && r.game.timerActive) ||
-          r.timeControl === "move" ||
-          r.timeControl === "match"
+          rr.timeControl === "move" ||
+          (rr.game && rr.game.timerActive && rr.timeControl !== "match")
         ) {
+          if (rr.timerInterval) {
+            console.log(
+              `[scheduleTurnInactivity] Skipping inactivity-based end; timerInterval active for room=${roomCode}`
+            );
+            return;
+          }
           try {
             const loserColor = r.game.currentPlayer;
             const winnerColor = loserColor === "b" ? "p" : "b";
-            processEndOfGame(
+            safeProcessEndOfGame(
               winnerColor,
               loserColor,
               r,
@@ -236,14 +242,22 @@ function scheduleTurnInactivity(roomCode) {
           // tratamos conforme o modo de tempo: se houver timer ativo, encerramos por perda de tempo;
           // caso contrário, passa-se a vez.
           if (
-            (rr.game && rr.game.timerActive) ||
-            rr.timeControl === "move" ||
-            rr.timeControl === "match"
+            r.timeControl === "move" ||
+            (r.game && r.game.timerActive && r.timeControl !== "match")
           ) {
+            // If the server-side timer is already running, prefer it as the canonical
+            // source of time loss. Avoid double-calling the end-of-game from the
+            // inactivity watchdog when the per-move timer (`timerInterval`) is active.
+            if (r.timerInterval) {
+              console.log(
+                `[scheduleTurnInactivity] Skipping inactivity-based end; timerInterval active for room=${roomCode}`
+              );
+              return;
+            }
             try {
               const loserColor = rr.game.currentPlayer;
               const winnerColor = loserColor === "b" ? "p" : "b";
-              processEndOfGame(
+              safeProcessEndOfGame(
                 winnerColor,
                 loserColor,
                 rr,
@@ -385,7 +399,112 @@ function sendGameState(roomCode, fullState, opts = {}) {
 
 async function startGameLogic(room) {
   if (!io) return;
+  // Proteção contra starts concorrentes / caminhos indesejados
+  try {
+    if (!room) return;
+    if (room._noFurtherGames) {
+      console.log(
+        `[startGameLogic] Sala ${room.roomCode} tem _noFurtherGames -> abortando start`
+      );
+      return;
+    }
+    if (room._starting) {
+      console.log(
+        `[startGameLogic] Sala ${room.roomCode} já está em processo de start -> abortando start concorrente`
+      );
+      return;
+    }
+    room._starting = true;
+  } catch (e) {}
+
   // Limpamos timeouts/contadores pendentes antes de iniciar um novo jogo
+  // Guard rails: não iniciar se a sala estiver marcada como concluída,
+  // se o match Tablita já foi decidido, ou se não houver 2 jogadores conectados.
+  try {
+    if (!room) return;
+    if (room.isGameConcluded) {
+      console.log(
+        `[startGameLogic] Sala ${room.roomCode} marcada como concluída. Abortando novo jogo.`
+      );
+      return;
+    }
+    if (room.isTablita && room.match) {
+      const p1 = room.match.player1 && room.match.player1.email;
+      const p2 = room.match.player2 && room.match.player2.email;
+      const p1Score =
+        room.match.score && typeof room.match.score[p1] === "number"
+          ? room.match.score[p1]
+          : 0;
+      const p2Score =
+        room.match.score && typeof room.match.score[p2] === "number"
+          ? room.match.score[p2]
+          : 0;
+      if (
+        p1Score >= 2 ||
+        p2Score >= 2 ||
+        (room.match.currentGame && room.match.currentGame > 2)
+      ) {
+        console.log(
+          `[startGameLogic] Match já decidido para sala ${room.roomCode} (p1=${p1Score} p2=${p2Score} currentGame=${room.match.currentGame}). Abortando.`
+        );
+        room.isGameConcluded = true;
+        return;
+      }
+    }
+    // Checa se ambos jogadores estão conectados
+    const connectedCount = (room.players || []).filter((p) => {
+      try {
+        return (
+          p &&
+          p.socketId &&
+          io.sockets.sockets.get(p.socketId) &&
+          io.sockets.sockets.get(p.socketId).connected
+        );
+      } catch (e) {
+        return false;
+      }
+    }).length;
+    if (connectedCount < 2) {
+      console.log(
+        `[startGameLogic] Menos de 2 jogadores conectados na sala ${room.roomCode} (connected=${connectedCount}). Abortando novo jogo.`
+      );
+      // Se for Tablita, finaliza o match declarando vencedor pelo placar
+      if (room.isTablita && room.match) {
+        const p1 = room.match.player1 && room.match.player1.email;
+        const p2 = room.match.player2 && room.match.player2.email;
+        const p1Score =
+          room.match.score && typeof room.match.score[p1] === "number"
+            ? room.match.score[p1]
+            : 0;
+        const p2Score =
+          room.match.score && typeof room.match.score[p2] === "number"
+            ? room.match.score[p2]
+            : 0;
+        let finalWinner = null;
+        if (p1Score > p2Score) finalWinner = room.match.player1;
+        else if (p2Score > p1Score) finalWinner = room.match.player2;
+        if (finalWinner) {
+          const winnerColorFinal =
+            room.game &&
+            room.game.users &&
+            room.game.users.white === finalWinner.email
+              ? "b"
+              : "p";
+          const finalReason = `Fim do match: jogador ausente. Placar: ${p1Score} a ${p2Score}.`;
+          io.to(room.roomCode).emit("gameOver", {
+            winner: winnerColorFinal,
+            reason: finalReason,
+            moveHistory: room.game ? room.game.moveHistory : [],
+            initialBoardState: room.game ? room.game.initialBoardState : null,
+          });
+          room.isGameConcluded = true;
+        }
+      }
+      return;
+    }
+  } catch (e) {
+    console.error("Erro nas checagens iniciais de startGameLogic:", e);
+  }
   try {
     if (room.turnInactivityTimeout) {
       clearTimeout(room.turnInactivityTimeout);
@@ -397,6 +516,10 @@ async function startGameLogic(room) {
     }
     // Reset contador de auto-pass para evitar transportar estados da partida anterior
     room._autoPassCount = 0;
+    // Limpa timestamp de encerramento anterior para permitir novo fluxo
+    try {
+      room._lastEndTimestamp = null;
+    } catch (e) {}
   } catch (e) {}
   const player1 = room.players[0];
   const player2 = room.players[1];
@@ -504,7 +627,7 @@ async function startGameLogic(room) {
   };
 
   if (!hasValidMoves(room.game.currentPlayer, room.game)) {
-    return processEndOfGame(
+    return safeProcessEndOfGame(
       null,
       null,
       room,
@@ -545,6 +668,15 @@ async function startGameLogic(room) {
   io.to(room.roomCode).emit("spectatorCount", {
     count: room.spectators ? room.spectators.size : 0,
   });
+
+  // clear the starting lock shortly after starting to allow future legitimate starts
+  try {
+    setTimeout(() => {
+      try {
+        if (room) room._starting = false;
+      } catch (e) {}
+    }, 2000);
+  } catch (e) {}
 
   // Para partidas de torneio, iniciar verificação de inatividade por turno (10s)
   if (room.isTournament) {
@@ -866,7 +998,7 @@ async function executeMove(roomCode, from, to, socketId, clientMoveId = null) {
         // mas usar o 'movesSinceCapture' é uma aproximação aceitável se ele for zerado na captura que gerou essa posição.
         if (game.movesSinceCapture >= 10) {
           // 5 lances de CADA jogador = 10 movimentos totais no histórico
-          return processEndOfGame(
+          return safeProcessEndOfGame(
             null,
             null,
             gameRoom,
@@ -878,7 +1010,7 @@ async function executeMove(roomCode, from, to, socketId, clientMoveId = null) {
       // Regra Geral (20 Lances de Dama sem captura) - PDF às vezes menciona 20 ou 40 dependendo da variante
       if (game.damaMovesWithoutCaptureOrPawnMove >= 40)
         // 20 lances cada = 40 meio-lances
-        return processEndOfGame(
+        return safeProcessEndOfGame(
           null,
           null,
           gameRoom,
@@ -888,7 +1020,7 @@ async function executeMove(roomCode, from, to, socketId, clientMoveId = null) {
       // Regra Geral de Falta de Progresso
       if (game.movesSinceCapture >= 40) {
         // 20 lances cada sem captura
-        return processEndOfGame(
+        return safeProcessEndOfGame(
           null,
           null,
           gameRoom,
@@ -903,7 +1035,7 @@ async function executeMove(roomCode, from, to, socketId, clientMoveId = null) {
       const winner = checkWinCondition(game.boardState, game.boardSize);
       if (winner) {
         const loser = winner === "b" ? "p" : "b";
-        return processEndOfGame(winner, loser, gameRoom, "Fim de jogo!");
+        return safeProcessEndOfGame(winner, loser, gameRoom, "Fim de jogo!");
       }
 
       game.mustCaptureWith = null;
@@ -913,7 +1045,7 @@ async function executeMove(roomCode, from, to, socketId, clientMoveId = null) {
       // Verifica se o próximo jogador tem movimentos
       if (!hasValidMoves(game.currentPlayer, game)) {
         const winner = game.currentPlayer === "b" ? "p" : "b";
-        return processEndOfGame(
+        return safeProcessEndOfGame(
           winner,
           game.currentPlayer,
           gameRoom,
@@ -971,6 +1103,166 @@ async function startNextTablitaGame(roomCode) {
   const room = gameRooms[roomCode];
   if (room) {
     console.log(`[Tablita] Iniciando próxima partida para sala ${roomCode}`);
+    // Defensive resets: garante que sinais residuais da partida anterior
+    // (timers, timeouts, marcações de conclusão) não impeçam o novo jogo.
+    try {
+      room.isGameConcluded = false;
+      if (room.timerInterval) {
+        clearInterval(room.timerInterval);
+        room.timerInterval = null;
+      }
+      if (room.turnInactivityTimeout) {
+        clearTimeout(room.turnInactivityTimeout);
+        room.turnInactivityTimeout = null;
+      }
+      if (room.firstMoveTimeout) {
+        clearTimeout(room.firstMoveTimeout);
+        room.firstMoveTimeout = null;
+      }
+      room._autoPassCount = 0;
+    } catch (e) {
+      console.error("Erro ao resetar timers antes da próxima Tablita:", e);
+    }
+
+    // Antes de iniciar o próximo jogo, verifica primeiro se o match já não
+    // foi decidido (placar ou currentGame inválido). Em seguida checa
+    // conectividade; se faltar jogador, finalizamos o match.
+    try {
+      const p1Email =
+        room.match && room.match.player1 && room.match.player1.email;
+      const p2Email =
+        room.match && room.match.player2 && room.match.player2.email;
+      const p1Score =
+        room.match && room.match.score ? room.match.score[p1Email] || 0 : 0;
+      const p2Score =
+        room.match && room.match.score ? room.match.score[p2Email] || 0 : 0;
+      const matchAlreadyOver =
+        p1Score >= 2 ||
+        p2Score >= 2 ||
+        (room.match && room.match.currentGame > 2);
+      if (matchAlreadyOver) {
+        console.log(
+          `[Tablita] Não iniciando próxima partida para ${roomCode}: match já decidido (p1=${p1Score} p2=${p2Score} currentGame=${
+            room.match && room.match.currentGame
+          })`
+        );
+        room.isGameConcluded = true;
+        room.cleanupTimeout = setTimeout(() => {
+          if (gameRooms[room.roomCode]) delete gameRooms[room.roomCode];
+        }, 60000);
+        return;
+      }
+
+      const connectedPlayers = (room.players || []).filter((p) => {
+        try {
+          return (
+            p &&
+            p.socketId &&
+            io.sockets.sockets.get(p.socketId) &&
+            io.sockets.sockets.get(p.socketId).connected
+          );
+        } catch (ee) {
+          return false;
+        }
+      });
+
+      if (connectedPlayers.length < 2) {
+        console.log(
+          `[Tablita] Não iniciando jogo 2 em ${roomCode}: jogadores conectados=${connectedPlayers.length}`
+        );
+
+        // Decide vencedor final com base no placar atual ou no jogador presente
+        const p1Email =
+          room.match && room.match.player1 && room.match.player1.email;
+        const p2Email =
+          room.match && room.match.player2 && room.match.player2.email;
+        const p1Score =
+          room.match && room.match.score ? room.match.score[p1Email] || 0 : 0;
+        const p2Score =
+          room.match && room.match.score ? room.match.score[p2Email] || 0 : 0;
+
+        let finalWinnerData = null;
+        if (p1Score > p2Score) finalWinnerData = room.match.player1;
+        else if (p2Score > p1Score) finalWinnerData = room.match.player2;
+        else if (connectedPlayers.length === 1) {
+          const connEmail = connectedPlayers[0].user.email;
+          finalWinnerData =
+            room.match.player1.email === connEmail
+              ? room.match.player1
+              : room.match.player2;
+        }
+
+        if (finalWinnerData) {
+          try {
+            const prize = room.bet * 2;
+            const updatedWinner = await User.findOneAndUpdate(
+              { email: finalWinnerData.email },
+              [
+                {
+                  $set: { saldo: { $round: [{ $add: ["$saldo", prize] }, 2] } },
+                },
+              ],
+              { new: true }
+            );
+
+            const winnerColorFinal =
+              room.game &&
+              room.game.users &&
+              room.game.users.white === finalWinnerData.email
+                ? "b"
+                : "p";
+
+            const finalReason = `Fim do match: jogador ausente. Placar: ${p1Score} a ${p2Score}.`;
+
+            io.to(room.roomCode).emit("gameOver", {
+              winner: winnerColorFinal,
+              reason: finalReason,
+              moveHistory: room.game ? room.game.moveHistory : [],
+              initialBoardState: room.game ? room.game.initialBoardState : null,
+            });
+
+            if (updatedWinner && finalWinnerData.socketId) {
+              const ws = io.sockets.sockets.get(finalWinnerData.socketId);
+              if (ws) ws.emit("updateSaldo", { newSaldo: updatedWinner.saldo });
+            }
+
+            // Salva histórico simplificado do match
+            try {
+              await MatchHistory.create({
+                player1: p1Email || "",
+                player2: p2Email || "",
+                winner: finalWinnerData.email,
+                bet: room.bet,
+                gameMode: room.gameMode,
+                reason: finalReason,
+                createdAt: new Date(),
+              });
+            } catch (mhErr) {
+              console.error(
+                "Erro salvando MatchHistory ao finalizar match por ausência:",
+                mhErr
+              );
+            }
+          } catch (e) {
+            console.error("Erro ao encerrar match por jogadores ausentes:", e);
+          }
+        }
+
+        room.isGameConcluded = true;
+        // Prevent any other code path from attempting to start new games
+        room._noFurtherGames = true;
+        room.cleanupTimeout = setTimeout(() => {
+          if (gameRooms[room.roomCode]) delete gameRooms[room.roomCode];
+        }, 60000);
+        return;
+      }
+    } catch (err) {
+      console.error(
+        "Erro verificando conectividade antes de startNextTablitaGame:",
+        err
+      );
+    }
+
     await startGameLogic(room);
   } else {
     console.log(
@@ -1979,6 +2271,30 @@ function initializeSocket(ioInstance) {
             if (room.gameMode === "tablita") {
               room.match = null;
             }
+
+            // Allow starting a new game: clear concluded flag and pending cleanup/timeouts
+            try {
+              room.isGameConcluded = false;
+              room._noFurtherGames = false;
+              // clear any scheduled cleanup that would delete the room
+              if (room.cleanupTimeout) {
+                clearTimeout(room.cleanupTimeout);
+                room.cleanupTimeout = null;
+              }
+              // clear any leftover timers to avoid interference
+              try {
+                if (room.timerInterval) clearInterval(room.timerInterval);
+              } catch (e) {}
+              try {
+                if (room.turnInactivityTimeout)
+                  clearTimeout(room.turnInactivityTimeout);
+                room.turnInactivityTimeout = null;
+              } catch (e) {}
+              try {
+                if (room.firstMoveTimeout) clearTimeout(room.firstMoveTimeout);
+                room.firstMoveTimeout = null;
+              } catch (e) {}
+            } catch (e) {}
 
             await startGameLogic(room);
           } catch (err) {
