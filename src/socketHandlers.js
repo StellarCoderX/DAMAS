@@ -1259,6 +1259,17 @@ function initializeSocket(ioInstance) {
           io.to(creatorSocket).emit("playerJoined", {
             email: socket.userData.email,
           });
+
+          // Emite evento indicando que a partida está prestes a iniciar
+          // (útil para tocar alerta sonoro mesmo quando a aba não está em foco)
+          try {
+            io.to(creatorSocket).emit("gameAboutToStart", {
+              roomCode: roomCode,
+              opponent: socket.userData.email,
+            });
+          } catch (e) {
+            console.error("Erro emitindo gameAboutToStart:", e);
+          }
         }
       } catch (e) {
         console.error("Erro emitindo playerJoined:", e);

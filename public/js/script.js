@@ -38,6 +38,27 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (e) {}
     });
   });
+
+  // Alerta sonoro quando a partida do usuário (criador) está prestes a iniciar
+  socket.on("gameAboutToStart", (data) => {
+    try {
+      // Se for o próprio usuário como criador, tocar som de alerta
+      if (window.currentUser && data && data.opponent) {
+        // Segurança: não tocar se o opponent for o próprio usuário
+        if (data.opponent === window.currentUser.email) return;
+        if (window.UI && window.UI.playAudio) {
+          window.UI.playAudio("join");
+        } else {
+          // Fallback simples
+          try {
+            const a = new Audio("/sounds/join.mp3");
+            a.volume = 0.8;
+            a.play().catch(() => {});
+          } catch (e) {}
+        }
+      }
+    } catch (e) {}
+  });
   const isGamePage = window.location.pathname.includes("jogo.html");
 
   // --- Ping indicator (RTT) ---
