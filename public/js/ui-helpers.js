@@ -45,6 +45,26 @@ window.UI = {
       captureSound: document.getElementById("capture-sound"),
       joinSound: document.getElementById("join-sound"),
     };
+
+    // Tentativa de desbloquear áudio em navegadores que bloqueiam autoplay:
+    // Ao primeiro clique do usuário, reproduz brevemente o som (ou tenta)
+    // para permitir futuras reproduções sem erro.
+    try {
+      const unlock = async () => {
+        try {
+          const s = this.elements.joinSound || this.elements.moveSound;
+          if (s) {
+            s.volume = s.volume || 0.8;
+            await s.play();
+            s.pause();
+            s.currentTime = 0;
+          }
+        } catch (e) {
+          // silêncio: se não conseguir reproduzir, continua sem quebrar
+        }
+      };
+      document.body.addEventListener("click", unlock, { once: true });
+    } catch (e) {}
   },
 
   // --- FEEDBACK TÁTIL (VIBRAÇÃO) ---

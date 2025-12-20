@@ -286,7 +286,20 @@ async function startTournament(tournament) {
   // Usaremos todos os inscritos (mesmo ausentes) para criar os pares
   const originalParticipants = [...tournament.participants];
 
-  console.log("[Torneio] Iniciando com inscritos: ", originalParticipants);
+  console.log("[Torneio] Inscritos atuais: ", originalParticipants);
+
+  // Se não houver número mínimo de jogadores, cancelar e reembolsar
+  if (originalParticipants.length < MIN_PLAYERS) {
+    await cancelTournamentAndRefund(
+      tournament,
+      `Inscrições insuficientes: ${originalParticipants.length}/${MIN_PLAYERS}`
+    );
+    console.log(
+      `[Torneio] Cancelado por número insuficiente de inscritos (${originalParticipants.length}/${MIN_PLAYERS})`
+    );
+    return;
+  }
+
   tournament.status = "active";
 
   const shuffled = originalParticipants.sort(() => 0.5 - Math.random());

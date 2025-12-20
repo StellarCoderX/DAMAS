@@ -1252,6 +1252,18 @@ function initializeSocket(ioInstance) {
       );
       room.players.push({ socketId: socket.id, user: socket.userData });
 
+      // Notifica o criador da sala que um oponente entrou (para tocar som no cliente)
+      try {
+        const creatorSocket = room.players[0] && room.players[0].socketId;
+        if (creatorSocket && creatorSocket !== socket.id) {
+          io.to(creatorSocket).emit("playerJoined", {
+            email: socket.userData.email,
+          });
+        }
+      } catch (e) {
+        console.error("Erro emitindo playerJoined:", e);
+      }
+
       await startGameLogic(room);
       io.emit("updateLobby", getLobbyInfo());
     });

@@ -711,6 +711,15 @@ window.initLobby = function (socket, UI) {
     if (prizeEl)
       prizeEl.textContent = `Prêmio: R$ ${data.prizePool.toFixed(2)}`;
   });
+  // Tocar som quando outro jogador entra na sua sala (será emitido apenas para o criador)
+  socket.on("playerJoined", (data) => {
+    try {
+      if (!data) return;
+      // Segurança: não tocar se o evento for referente ao próprio usuário
+      if (window.currentUser && data.email === window.currentUser.email) return;
+      if (window.UI && window.UI.playAudio) window.UI.playAudio("join");
+    } catch (e) {}
+  });
   socket.on("joinError", (data) => {
     alert(data.message);
     document.getElementById("waiting-area").classList.add("hidden");
