@@ -402,10 +402,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // Prioritize pending spectate requests to avoid rejoining as player
     try {
       const spectateRoom = localStorage.getItem("spectateRoom");
-      // If we have a spectateRoom saved, always try to rejoin as spectator.
-      // This prevents accidental rejoin as player when the user was spectating
-      // and refreshes the page.
-      if (spectateRoom) {
+      const spectatePending = localStorage.getItem("spectatePending");
+      // Only auto-rejoin as spectator if there is an explicit pending flag
+      // (user initiated a 'Watch' and expects to re-enter as spectator).
+      if (spectateRoom && spectatePending === "1") {
         socket.emit("joinAsSpectator", { roomCode: spectateRoom });
         try {
           localStorage.removeItem("spectatePending");
@@ -434,7 +434,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // request spectator join so the client is correctly put into spectator mode.
     try {
       const spectateRoom = localStorage.getItem("spectateRoom");
-      if (spectateRoom) {
+      const spectatePending = localStorage.getItem("spectatePending");
+      if (spectateRoom && spectatePending === "1") {
         socket.emit("joinAsSpectator", { roomCode: spectateRoom });
         try {
           localStorage.removeItem("spectatePending");
