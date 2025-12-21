@@ -406,6 +406,63 @@
               <button id="switch-turn-btn" class="btn-action" style="background: var(--success);">Vez: <span
                   id="test-turn">Brancas</span></button>
             </div>
+
+            <div style="display:flex; gap:8px; justify-content:center; margin-top:8px; align-items:center;">
+              <label style="color:var(--text-secondary); margin-right:6px;">Definir Vez:</label>
+              <select id="turn-select"
+                style="background:#0f172a; color:white; border:1px solid #334155; padding:6px; border-radius:6px;">
+                <option value="b">Brancas</option>
+                <option value="p">Pretas</option>
+              </select>
+              <button id="set-turn-btn" class="btn-action" style="background:#16a085; color:white;">Definir</button>
+            </div>
+
+            <div style="display:flex; gap:8px; justify-content:center; margin-top:10px;">
+              <button id="remove-mode-btn" class="btn-action" style="background:#c0392b; color:white;">Remover
+                Peça</button>
+              <button id="promote-mode-btn" class="btn-action" style="background:#9b59b6; color:white;">Promover para
+                Dama</button>
+              <button id="edit-move-btn" class="btn-action" style="background:#2c3e50; color:white;">Modo Mover</button>
+            </div>
+
+            <div style="margin-top:12px; text-align:left;">
+              <label style="color: var(--text-secondary); font-size: 0.9rem; display:block; margin-bottom:5px;">Carregar
+                Tabuleiro (JSON)</label>
+              <textarea id="board-json-input"
+                placeholder='Cole aqui um array 8x8 JSON, ex: [[0,"p",...],...]\nOpcional: { "board": [...], "currentPlayer": "b" }'
+                style="width:100%; height:110px; background:#0f172a; color:white; border:1px solid #334155; padding:8px; border-radius:6px;"></textarea>
+              <div style="display:flex; gap:8px; justify-content:center; margin-top:8px;">
+                <button id="load-json-btn" class="btn-action" style="background:#3498db; color:white;">Carregar
+                  Tabuleiro</button>
+                <button id="export-json-btn" class="btn-action" style="background:#27ae60; color:white;">Exportar
+                  JSON</button>
+                <button id="clear-json-btn" class="btn-action" style="background:#334155; color:white;">Limpar</button>
+              </div>
+            </div>
+
+            <div style="margin-top:12px; text-align:left;">
+              <label style="color: var(--text-secondary); font-size: 0.9rem; display:block; margin-bottom:5px;">Escrever
+                Jogadas</label>
+              <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
+                <input id="move-input" placeholder="Formato: fromRow,fromCol->toRow,toCol  ex: 5,2->2,5"
+                  style="flex:1; padding:8px; background:#0f172a; color:white; border:1px solid #334155; border-radius:6px;" />
+                <button id="add-move-btn" class="btn-action" style="background:#f39c12; color:white;">Adicionar</button>
+              </div>
+              <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
+                <button id="exec-next-btn" class="btn-action" style="background:#16a085; color:white;">Executar
+                  Próxima</button>
+                <button id="exec-all-btn" class="btn-action" style="background:#0e84d1; color:white;">Executar
+                  Todas</button>
+                <button id="clear-moves-btn" class="btn-action" style="background:#334155; color:white;">Limpar
+                  Lista</button>
+                <label style="color:var(--text-secondary); margin-left:8px;">Ignorar Lei da Maioria</label>
+                <input type="checkbox" id="ignore-majority" style="transform:scale(1.1);" />
+              </div>
+              <div id="moves-list"
+                style="max-height:140px; overflow:auto; border:1px solid #334155; padding:8px; border-radius:6px; background:#081226;">
+                <!-- Lista de jogadas -->
+              </div>
+            </div>
           </div>
         </div>
       </div>

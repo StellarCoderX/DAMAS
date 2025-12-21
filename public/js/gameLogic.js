@@ -269,18 +269,65 @@
     if (!ignoreMajorityRule) {
       const bestCaptures = findBestCaptureMoves(playerColor, game);
       if (bestCaptures.length > 0) {
-        const isMoveInBestCaptures = bestCaptures.some(
+        const matchingSeq = bestCaptures.find(
           (seq) =>
             seq[0].row === from.row &&
             seq[0].col === from.col &&
-            seq[1].row === to.row &&
-            seq[1].col === to.col
+            seq.slice(1).some((p) => p.row === to.row && p.col === to.col)
         );
-        if (!isMoveInBestCaptures) {
+        if (!matchingSeq) {
           return {
             valid: false,
             reason: "Lei da Maioria: Capture o maior número de peças possível.",
           };
+        } else {
+          // Se o destino for um pouso posterior da sequência ótima, podemos
+          // permitir que o jogador escolha pousar em qualquer um dos pousos
+          // intermediários/terminais da sequência. Construímos a lista de
+          // posições capturadas que ocorreriam até esse pouso e retornamos
+          // um resultado de captura composto.
+          const destIndex = matchingSeq.findIndex(
+            (p) => p.row === to.row && p.col === to.col
+          );
+          if (destIndex > 1 || destIndex === 1) {
+            // calcular posições capturadas entre cada salto até destIndex
+            const capturedPositions = [];
+            for (let s = 0; s < destIndex; s++) {
+              const a = matchingSeq[s];
+              const b = matchingSeq[s + 1];
+              // segmento a -> b: encontrar peça capturada entre eles
+              if (
+                Math.abs(a.row - b.row) === 2 &&
+                Math.abs(a.col - b.col) === 2
+              ) {
+                // salto de peça normal (ponto médio)
+                capturedPositions.push({
+                  row: (a.row + b.row) / 2,
+                  col: (a.col + b.col) / 2,
+                });
+              } else {
+                // Dama: percorre diagonal e encontra a peça adversária entre a e b
+                const stepR = b.row > a.row ? 1 : -1;
+                const stepC = b.col > a.col ? 1 : -1;
+                for (let i = 1; ; i++) {
+                  const rr = a.row + i * stepR;
+                  const cc = a.col + i * stepC;
+                  if (rr === b.row && cc === b.col) break;
+                  const maybe = board[rr][cc];
+                  if (maybe !== 0) {
+                    capturedPositions.push({ row: rr, col: cc });
+                    break;
+                  }
+                }
+              }
+            }
+            // Retornamos um objeto compatível com os handlers: isCapture true e capturedPos = array
+            return {
+              valid: true,
+              isCapture: true,
+              capturedPos: capturedPositions,
+            };
+          }
         }
       }
     }

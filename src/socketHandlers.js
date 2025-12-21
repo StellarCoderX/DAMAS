@@ -872,7 +872,11 @@ async function executeMove(roomCode, from, to, socketId, clientMoveId = null) {
     if (isValid.isCapture) {
       // CORREÇÃO CRÍTICA: NÃO removemos a peça do tabuleiro imediatamente
       // Apenas adicionamos à lista de 'mortos-vivos' que servem de obstáculo
-      game.turnCapturedPieces.push(isValid.capturedPos);
+      if (Array.isArray(isValid.capturedPos)) {
+        isValid.capturedPos.forEach((p) => game.turnCapturedPieces.push(p));
+      } else {
+        game.turnCapturedPieces.push(isValid.capturedPos);
+      }
 
       // Verifica se pode capturar mais
       const nextCaptures = getAllPossibleCapturesForPiece(to.row, to.col, game);
@@ -1769,7 +1773,9 @@ function initializeSocket(ioInstance) {
         ) {
           return socket.emit("showValidMoves", []);
         }
-        captures.forEach((seq) => validMoves.push(seq[1]));
+        captures.forEach((seq) => {
+          for (let i = 1; i < seq.length; i++) validMoves.push(seq[i]);
+        });
         return socket.emit("showValidMoves", validMoves);
       }
 
@@ -1778,7 +1784,9 @@ function initializeSocket(ioInstance) {
         const capturesForThis = bestCaptures.filter(
           (seq) => seq[0].row === row && seq[0].col === col
         );
-        capturesForThis.forEach((seq) => validMoves.push(seq[1]));
+        capturesForThis.forEach((seq) => {
+          for (let i = 1; i < seq.length; i++) validMoves.push(seq[i]);
+        });
       } else {
         const boardSize = game.boardSize;
         for (let r = 0; r < boardSize; r++) {

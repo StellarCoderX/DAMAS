@@ -357,7 +357,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let testGame = {};
   let selectedPiece = null;
-  let lastTestGameState = null;
+  let testGameHistory = [];
+  let removeMode = false;
+  let promoteMode = false;
+  let editMoveMode = false;
+  let editMoveSelected = null;
 
   const toggleTestBoardBtn = document.getElementById("toggle-test-board-btn");
   const testBoardContainer = document.getElementById("test-board-container");
@@ -367,6 +371,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const switchTurnBtn = document.getElementById("switch-turn-btn");
   const undoBoardBtn = document.getElementById("undo-board-btn");
   const testTurnSpan = document.getElementById("test-turn");
+  const turnSelect = document.getElementById("turn-select");
+  const setTurnBtn = document.getElementById("set-turn-btn");
 
   // Novo Elemento Select
   const openingSelect = document.getElementById("opening-select");
@@ -410,14 +416,366 @@ document.addEventListener("DOMContentLoaded", () => {
       testGame.currentPlayer = testGame.currentPlayer === "b" ? "p" : "b";
       updateTestGameUI();
     });
+
+    // Carregador de JSON do tabuleiro (para reproduzir cenários)
+    const boardJsonInput = document.getElementById("board-json-input");
+    const loadJsonBtn = document.getElementById("load-json-btn");
+    const clearJsonBtn = document.getElementById("clear-json-btn");
+    const exportJsonBtn = document.getElementById("export-json-btn");
+    const removeModeBtn = document.getElementById("remove-mode-btn");
+    const promoteModeBtn = document.getElementById("promote-mode-btn");
+    const editMoveBtn = document.getElementById("edit-move-btn");
+    const moveInput = document.getElementById("move-input");
+    const addMoveBtn = document.getElementById("add-move-btn");
+    const execNextBtn = document.getElementById("exec-next-btn");
+    const execAllBtn = document.getElementById("exec-all-btn");
+    const clearMovesBtn = document.getElementById("clear-moves-btn");
+    const movesListEl = document.getElementById("moves-list");
+    const ignoreMajorityEl = document.getElementById("ignore-majority");
+
+    let movesQueue = [];
+
+    if (loadJsonBtn) {
+      loadJsonBtn.addEventListener("click", () => {
+        const raw = boardJsonInput.value.trim();
+        if (!raw) {
+          testStatus.textContent = "Cole o JSON do tabuleiro antes.";
+          return;
+        }
+        try {
+          const parsed = JSON.parse(raw);
+          let boardArr = null;
+          let player = null;
+          if (Array.isArray(parsed)) {
+            boardArr = parsed;
+          } else if (parsed && parsed.board && Array.isArray(parsed.board)) {
+            boardArr = parsed.board;
+            if (parsed.currentPlayer) player = parsed.currentPlayer;
+          }
+
+          if (
+            !boardArr ||
+            boardArr.length !== 8 ||
+            !boardArr.every((r) => Array.isArray(r) && r.length === 8)
+          ) {
+            testStatus.textContent =
+              "Formato inválido: envie um array 8x8 ou um objeto {board: [...], currentPlayer: 'b'}.";
+            return;
+          }
+
+          testGame.boardState = JSON.parse(JSON.stringify(boardArr));
+          testGame.turnCapturedPieces = [];
+          if (player === "b" || player === "p") testGame.currentPlayer = player;
+          testGameHistory = [];
+          movesQueue = [];
+          renderMovesList();
+          renderPieces();
+          updateTestGameUI();
+          testStatus.textContent = "Tabuleiro carregado com sucesso.";
+        } catch (e) {
+          testStatus.textContent = "JSON inválido: " + e.message;
+        }
+      });
+    }
+
+    // Exporta o board atual para o campo JSON e copia para clipboard
+    if (exportJsonBtn) {
+      exportJsonBtn.addEventListener("click", async () => {
+        try {
+          let json = null;
+          if (testGame && Array.isArray(testGame.boardState)) {
+            json = JSON.stringify(testGame.boardState);
+          } else {
+            // fallback: monta a partir do DOM
+            const board = [];
+            for (let r = 0; r < 8; r++) {
+              const row = [];
+              for (let c = 0; c < 8; c++) {
+                const sq = document.querySelector(
+                  `#board .square[data-row='${r}'][data-col='${c}']`
+                );
+                const pieceEl = sq ? sq.querySelector(".piece") : null;
+                if (!pieceEl) {
+                  row.push(0);
+                  continue;
+                }
+                const isBlack = pieceEl.classList.contains("black-piece");
+                const isKing = pieceEl.classList.contains("king");
+                let ch = isBlack ? "p" : "b";
+                if (isKing) ch = ch.toUpperCase();
+                row.push(ch);
+              }
+              board.push(row);
+            }
+            json = JSON.stringify(board);
+          }
+          if (boardJsonInput) boardJsonInput.value = json;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(json);
+            testStatus.textContent =
+              "JSON exportado e copiado para a área de transferência.";
+          } else {
+            testStatus.textContent =
+              "JSON exportado para o campo; copie manualmente.";
+          }
+        } catch (e) {
+          testStatus.textContent = "Erro ao exportar JSON: " + e.message;
+        }
+      });
+    }
+
+    if (clearJsonBtn) {
+      clearJsonBtn.addEventListener("click", () => {
+        const b = document.getElementById("board-json-input");
+        if (b) b.value = "";
+        testStatus.textContent = "Campo limpo.";
+      });
+    }
+
+    // Remover / Promover modos
+    function updateModeButtons() {
+      if (removeModeBtn) removeModeBtn.style.opacity = removeMode ? "1" : "0.7";
+      if (promoteModeBtn)
+        promoteModeBtn.style.opacity = promoteMode ? "1" : "0.7";
+      if (editMoveBtn) editMoveBtn.style.opacity = editMoveMode ? "1" : "0.7";
+      if (removeMode && promoteMode) {
+        // nunca ambos ao mesmo tempo
+        promoteMode = false;
+      }
+      // Se outro modo estiver ativo, desativa o modo mover
+      if (removeMode || promoteMode) editMoveMode = false;
+    }
+
+    if (removeModeBtn) {
+      removeModeBtn.addEventListener("click", () => {
+        removeMode = !removeMode;
+        if (removeMode) promoteMode = false;
+        updateModeButtons();
+        testStatus.textContent = removeMode
+          ? "Modo Remover ativo: clique em uma peça para removê-la."
+          : "";
+      });
+    }
+
+    if (promoteModeBtn) {
+      promoteModeBtn.addEventListener("click", () => {
+        promoteMode = !promoteMode;
+        if (promoteMode) removeMode = false;
+        updateModeButtons();
+        testStatus.textContent = promoteMode
+          ? "Modo Promover ativo: clique em uma peça para promovê-la."
+          : "";
+      });
+    }
+
+    if (editMoveBtn) {
+      editMoveBtn.addEventListener("click", () => {
+        editMoveMode = !editMoveMode;
+        if (editMoveMode) {
+          removeMode = false;
+          promoteMode = false;
+          editMoveSelected = null;
+        }
+        updateModeButtons();
+        testStatus.textContent = editMoveMode
+          ? "Modo Mover ativo: clique na peça que deseja mover, depois clique no destino."
+          : "";
+      });
+    }
+
+    // Moves queue handlers
+    function parseMoveText(text) {
+      // accepts formats: "r,c->r,c" or "r,c r,c"
+      const t = text.trim();
+      const arrow = t.includes("->");
+      const parts = arrow ? t.split("->") : t.split(/\s+/);
+      if (parts.length < 2) return null;
+      const a = parts[0]
+        .trim()
+        .split(",")
+        .map((s) => parseInt(s.trim()));
+      const b = parts[1]
+        .trim()
+        .split(",")
+        .map((s) => parseInt(s.trim()));
+      if (a.length < 2 || b.length < 2 || a.some(isNaN) || b.some(isNaN))
+        return null;
+      return { from: { row: a[0], col: a[1] }, to: { row: b[0], col: b[1] } };
+    }
+
+    function renderMovesList() {
+      movesListEl.innerHTML = "";
+      movesQueue.forEach((m, idx) => {
+        const div = document.createElement("div");
+        div.style.display = "flex";
+        div.style.justifyContent = "space-between";
+        div.style.alignItems = "center";
+        div.style.padding = "4px 0";
+        div.innerHTML = `<span style="color:#fff">${idx + 1}. ${m.from.row},${
+          m.from.col
+        } -> ${m.to.row},${m.to.col}</span>`;
+        const rm = document.createElement("button");
+        rm.textContent = "X";
+        rm.style.background = "#c0392b";
+        rm.style.color = "white";
+        rm.style.border = "0";
+        rm.style.borderRadius = "4px";
+        rm.style.padding = "2px 6px";
+        rm.onclick = () => {
+          movesQueue.splice(idx, 1);
+          renderMovesList();
+        };
+        div.appendChild(rm);
+        movesListEl.appendChild(div);
+      });
+      if (movesQueue.length === 0)
+        movesListEl.innerHTML =
+          '<div style="color:#94a3b8">Nenhuma jogada na fila.</div>';
+    }
+
+    if (addMoveBtn) {
+      addMoveBtn.addEventListener("click", () => {
+        const txt = moveInput.value;
+        const mv = parseMoveText(txt);
+        if (!mv) {
+          testStatus.textContent = "Formato inválido. Use r,c->r,c";
+          return;
+        }
+        movesQueue.push(mv);
+        renderMovesList();
+        moveInput.value = "";
+        testStatus.textContent = "Jogada adicionada.";
+      });
+    }
+
+    async function applyMoveObj(mv, ignoreMajority = false) {
+      // Validate with gameLogic
+      const player = testGame.currentPlayer;
+      const res = window.gameLogic.isMoveValid(
+        mv.from,
+        mv.to,
+        player,
+        testGame,
+        ignoreMajority
+      );
+      if (!res.valid) {
+        testStatus.textContent = res.reason || "Movimento inválido.";
+        return false;
+      }
+
+      // Save history
+      testGameHistory.push(JSON.parse(JSON.stringify(testGame)));
+
+      // Apply move
+      const piece = testGame.boardState[mv.from.row][mv.from.col];
+      testGame.boardState[mv.to.row][mv.to.col] = piece;
+      testGame.boardState[mv.from.row][mv.from.col] = 0;
+
+      if (res.isCapture && res.capturedPos) {
+        // store captured positions in turnCapturedPieces (do not remove yet)
+        if (!Array.isArray(res.capturedPos)) {
+          testGame.turnCapturedPieces.push(res.capturedPos);
+        } else {
+          res.capturedPos.forEach((p) => testGame.turnCapturedPieces.push(p));
+        }
+
+        const nextCaptures = window.gameLogic.getAllPossibleCapturesForPiece(
+          mv.to.row,
+          mv.to.col,
+          testGame
+        );
+        const canCaptureAgain = nextCaptures.length > 0;
+        if (!canCaptureAgain) {
+          // finalize: remove captured pieces now
+          testGame.turnCapturedPieces.forEach((p) => {
+            if (
+              testGame.boardState[p.row] &&
+              typeof testGame.boardState[p.row][p.col] !== "undefined"
+            ) {
+              testGame.boardState[p.row][p.col] = 0;
+            }
+          });
+          testGame.turnCapturedPieces = [];
+
+          // promotion handling
+          if (piece === "b" && mv.to.row === 0)
+            testGame.boardState[mv.to.row][mv.to.col] = "B";
+          if (piece === "p" && mv.to.row === testGame.boardSize - 1)
+            testGame.boardState[mv.to.row][mv.to.col] = "P";
+          testGame.currentPlayer = testGame.currentPlayer === "b" ? "p" : "b";
+        }
+      } else {
+        // non capture move
+        if (piece === "b" && mv.to.row === 0)
+          testGame.boardState[mv.to.row][mv.to.col] = "B";
+        if (piece === "p" && mv.to.row === testGame.boardSize - 1)
+          testGame.boardState[mv.to.row][mv.to.col] = "P";
+        testGame.currentPlayer = testGame.currentPlayer === "b" ? "p" : "b";
+      }
+
+      renderPieces();
+      updateTestGameUI();
+      return true;
+    }
+
+    if (execNextBtn) {
+      execNextBtn.addEventListener("click", async () => {
+        if (movesQueue.length === 0) {
+          testStatus.textContent = "Nenhuma jogada na fila.";
+          return;
+        }
+        const mv = movesQueue.shift();
+        renderMovesList();
+        const ignore = ignoreMajorityEl && ignoreMajorityEl.checked;
+        const ok = await applyMoveObj(mv, ignore);
+        if (!ok) {
+          testStatus.textContent =
+            "Falha ao aplicar jogada; operação interrompida.";
+        }
+      });
+    }
+
+    if (execAllBtn) {
+      execAllBtn.addEventListener("click", async () => {
+        const ignore = ignoreMajorityEl && ignoreMajorityEl.checked;
+        while (movesQueue.length > 0) {
+          const mv = movesQueue.shift();
+          renderMovesList();
+          const ok = await applyMoveObj(mv, ignore);
+          if (!ok) break;
+        }
+      });
+    }
+
+    if (clearMovesBtn) {
+      clearMovesBtn.addEventListener("click", () => {
+        movesQueue = [];
+        renderMovesList();
+        testStatus.textContent = "Lista limpa.";
+      });
+    }
+
+    renderMovesList();
+
+    if (setTurnBtn && turnSelect) {
+      setTurnBtn.addEventListener("click", () => {
+        const val = turnSelect.value;
+        if (val === "b" || val === "p") {
+          testGame.currentPlayer = val;
+          updateTestGameUI();
+          testStatus.textContent = `Vez definida: ${
+            val === "b" ? "Brancas" : "Pretas"
+          }`;
+        }
+      });
+    }
     createBoard();
     startTestGame();
   }
 
   function handleUndoMove() {
-    if (lastTestGameState) {
-      testGame = JSON.parse(JSON.stringify(lastTestGameState));
-      lastTestGameState = null;
+    if (testGameHistory && testGameHistory.length > 0) {
+      testGame = testGameHistory.pop();
       renderPieces();
       updateTestGameUI();
       testStatus.textContent = "Jogada anterior restaurada.";
@@ -443,9 +801,10 @@ document.addEventListener("DOMContentLoaded", () => {
       boardState: JSON.parse(JSON.stringify(initialBoard)),
       boardSize: 8,
       currentPlayer: "b",
+      turnCapturedPieces: [],
     };
     selectedPiece = null;
-    lastTestGameState = null;
+    testGameHistory = [];
     renderPieces();
     updateTestGameUI();
   }
@@ -533,6 +892,69 @@ document.addEventListener("DOMContentLoaded", () => {
     const col = parseInt(square.dataset.col);
     const clickedPieceElement = e.target.closest(".piece");
 
+    // Modo Editar/Mover: selecione peça e clique destino (movimento livre)
+    if (editMoveMode) {
+      // Se clicou em uma peça, seleciona-a para mover
+      if (clickedPieceElement && testGame.boardState[row][col] !== 0) {
+        editMoveSelected = { row, col, piece: testGame.boardState[row][col] };
+        testGameHistory.push(JSON.parse(JSON.stringify(testGame)));
+        testStatus.textContent = `Peça selecionada em (${row}, ${col}). Agora clique no destino.`;
+        return;
+      }
+
+      // Se clicou em um quadrado vazio (ou sobre outra peça) e há seleção, move
+      if (editMoveSelected) {
+        // evita mover para a mesma casa
+        if (editMoveSelected.row === row && editMoveSelected.col === col) {
+          testStatus.textContent = "Destino igual à origem; seleção mantida.";
+          return;
+        }
+
+        // realiza o movimento (substitui o destino)
+        testGame.boardState[editMoveSelected.row][editMoveSelected.col] = 0;
+        testGame.boardState[row][col] = editMoveSelected.piece;
+        renderPieces();
+        updateTestGameUI();
+        testStatus.textContent = `Peça movida para (${row}, ${col}).`;
+        editMoveSelected = null;
+        return;
+      }
+
+      testStatus.textContent =
+        "Clique em uma peça para selecionar antes de mover.";
+      return;
+    }
+    // Modo Remover: ao clicar em qualquer peça, remove-a
+    if (removeMode) {
+      if (testGame.boardState[row][col] !== 0) {
+        testGameHistory.push(JSON.parse(JSON.stringify(testGame)));
+        testGame.boardState[row][col] = 0;
+        renderPieces();
+        updateTestGameUI();
+        testStatus.textContent = `Peça removida em (${row}, ${col}).`;
+      } else {
+        testStatus.textContent = "Não há peça nessa casa.";
+      }
+      return;
+    }
+
+    // Modo Promover: ao clicar em peça, promove para dama
+    if (promoteMode) {
+      const pieceType = testGame.boardState[row][col];
+      if (pieceType !== 0) {
+        testGameHistory.push(JSON.parse(JSON.stringify(testGame)));
+        const lower = pieceType.toLowerCase();
+        if (lower === "b") testGame.boardState[row][col] = "B";
+        else if (lower === "p") testGame.boardState[row][col] = "P";
+        renderPieces();
+        updateTestGameUI();
+        testStatus.textContent = `Peça promovida em (${row}, ${col}).`;
+      } else {
+        testStatus.textContent = "Não há peça nessa casa para promover.";
+      }
+      return;
+    }
+
     if (selectedPiece) {
       if (square.classList.contains("valid-move-highlight")) {
         const move = {
@@ -545,11 +967,11 @@ document.addEventListener("DOMContentLoaded", () => {
           move.to,
           testGame.currentPlayer,
           testGame,
-          true
+          false
         );
 
         if (isValid.valid) {
-          lastTestGameState = JSON.parse(JSON.stringify(testGame));
+          testGameHistory.push(JSON.parse(JSON.stringify(testGame)));
           const piece = testGame.boardState[move.from.row][move.from.col];
           testGame.boardState[move.to.row][move.to.col] = piece;
           testGame.boardState[move.from.row][move.from.col] = 0;
@@ -557,9 +979,15 @@ document.addEventListener("DOMContentLoaded", () => {
           let canCaptureAgain = false;
 
           if (isValid.isCapture) {
-            testGame.boardState[isValid.capturedPos.row][
-              isValid.capturedPos.col
-            ] = 0;
+            // accumulate captured positions into turnCapturedPieces (do not remove yet)
+            if (!Array.isArray(isValid.capturedPos)) {
+              testGame.turnCapturedPieces.push(isValid.capturedPos);
+            } else {
+              isValid.capturedPos.forEach((p) =>
+                testGame.turnCapturedPieces.push(p)
+              );
+            }
+
             const nextCaptures =
               window.gameLogic.getAllPossibleCapturesForPiece(
                 move.to.row,
@@ -567,6 +995,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 testGame
               );
             canCaptureAgain = nextCaptures.length > 0;
+
+            if (!canCaptureAgain) {
+              // finalize captures: remove captured pieces now
+              testGame.turnCapturedPieces.forEach((p) => {
+                if (
+                  testGame.boardState[p.row] &&
+                  typeof testGame.boardState[p.row][p.col] !== "undefined"
+                ) {
+                  testGame.boardState[p.row][p.col] = 0;
+                }
+              });
+              testGame.turnCapturedPieces = [];
+            }
           }
 
           if (!canCaptureAgain) {
@@ -655,7 +1096,21 @@ document.addEventListener("DOMContentLoaded", () => {
       const capturesForThisPiece = bestCaptures.filter(
         (seq) => seq[0].row === row && seq[0].col === col
       );
-      validMoves = capturesForThisPiece.map((seq) => seq[1]);
+      // coletar todos os pousos possíveis da sequência (não apenas o primeiro)
+      const dests = [];
+      capturesForThisPiece.forEach((seq) => {
+        for (let i = 1; i < seq.length; i++) {
+          dests.push(seq[i]);
+        }
+      });
+      // deduplicar
+      const seen = new Set();
+      validMoves = dests.filter((d) => {
+        const k = `${d.row},${d.col}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
     } else {
       for (let toRow = 0; toRow < 8; toRow++) {
         for (let toCol = 0; toCol < 8; toCol++) {
