@@ -203,12 +203,15 @@ window.GameCore = (function () {
 
             // Tocar áudio correspondente
             try {
-              if (
-                Array.isArray(payload.captured) &&
-                payload.captured.length > 0
-              )
-                state.UI.playAudio("capture");
-              else state.UI.playAudio("move");
+              // Não reproduz se já reproduzimos durante o movimento otimista
+              if (!isMyMove) {
+                if (
+                  Array.isArray(payload.captured) &&
+                  payload.captured.length > 0
+                )
+                  state.UI.playAudio("capture");
+                else state.UI.playAudio("move");
+              }
             } catch (e) {}
 
             // Se era nosso optimistic move, limpa estado otimista
