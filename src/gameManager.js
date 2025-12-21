@@ -18,6 +18,17 @@ function setTournamentManager(tm) {
   tournamentManager = tm;
 }
 
+// Verifica se existe captura obrigatória para o jogador atual no objeto game
+function isMandatoryCapturePresent(game) {
+  try {
+    const caps = findBestCaptureMoves(game.currentPlayer, game);
+    return Array.isArray(caps) && caps.length > 0;
+  } catch (e) {
+    console.error("isMandatoryCapturePresent error:", e);
+    return false;
+  }
+}
+
 function startTimer(roomCode) {
   const room = gameRooms[roomCode];
   if (!room) return;
@@ -479,4 +490,5 @@ module.exports = {
   processEndOfGame,
   safeProcessEndOfGame,
   setTournamentManager,
+  isMandatoryCapturePresent,
 };

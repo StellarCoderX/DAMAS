@@ -6,3 +6,17 @@
 .board {
   /* exemplo básico caso precise */
 }
+
+/* Ajuste responsivo para coroa (king) - usa unidades relativas por padrão */
+.piece.king::after {
+  font-size: 1.4rem;
+  line-height: 1;
+  transform: translate(-50%, -50%);
+}
+
+@media (max-width: 600px) {
+  .piece.king::after {
+    font-size: 14px !important;
+    transform: translate(-50%, -50%) !important;
+  }
+}
