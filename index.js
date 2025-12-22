@@ -327,6 +327,11 @@ app.post("/api/withdraw", async (req, res) => {
       return res.status(400).json({ message: "Dados incompletos." });
     if (amount <= 0)
       return res.status(400).json({ message: "Valor inválido." });
+    // Enforce minimum withdrawal amount (R$10)
+    if (amount < 10)
+      return res
+        .status(400)
+        .json({ message: "Valor mínimo para saque é R$10." });
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user)
       return res.status(404).json({ message: "Usuário não encontrado." });

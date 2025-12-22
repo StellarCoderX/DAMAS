@@ -353,11 +353,9 @@ window.initLobby = function (socket, UI) {
       const timerSelect = document.getElementById("timer-select");
       const timerDuration = timerSelect ? timerSelect.value : 40;
 
-      // NOVA LÓGICA: Checa se é privada
-      const isPrivateCheckbox = document.getElementById(
-        "private-room-checkbox"
-      );
-      const isPrivate = isPrivateCheckbox ? isPrivateCheckbox.checked : false;
+      // Nota: criação de salas privadas está temporariamente desativada no cliente
+      // Ignora qualquer checkbox e força isPrivate = false para evitar criação
+      const isPrivate = false;
 
       if (bet > 0 && window.currentUser) {
         socket.emit("createRoom", {
@@ -927,7 +925,8 @@ window.initLobby = function (socket, UI) {
       const amount = parseFloat(
         document.getElementById("withdraw-amount").value
       );
-      if (!pixKey || amount < 30) return alert("Valor inválido.");
+      // Mínimo de saque agora R$10
+      if (!pixKey || amount < 10) return alert("Valor inválido. Mínimo R$10.");
       try {
         const res = await fetch("/api/withdraw", {
           method: "POST",

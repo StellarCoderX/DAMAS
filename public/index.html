@@ -153,9 +153,11 @@
           <!-- CHECKBOX SALA PRIVADA -->
           <div class="input-wrapper"
             style="grid-column: span 3; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 5px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px;">
-            <input type="checkbox" id="private-room-checkbox" style="width: 20px; height: 20px; cursor: pointer;">
-            <label for="private-room-checkbox" style="margin: 0; cursor: pointer; color: #f1c40f; font-weight: bold;">🔒
-              Sala Privada (Oculta)</label>
+            <input type="checkbox" id="private-room-checkbox" style="width: 20px; height: 20px; cursor: not-allowed;"
+              disabled title="Temporariamente indisponível">
+            <label for="private-room-checkbox"
+              style="margin: 0; cursor: not-allowed; color: #aaa; font-weight: bold;">🔒
+              Sala Privada (Indisponível)</label>
           </div>
 
         </div>
@@ -323,7 +325,7 @@
       <p style="color:#e74c3c; font-size:0.8rem; margin-bottom:10px;">Taxa de 30% no saque.</p>
       <form id="withdraw-form">
         <input type="text" id="withdraw-pix-key" placeholder="Chave PIX" class="modern-input" required>
-        <input type="number" id="withdraw-amount" placeholder="Valor (Min R$30)" min="30" class="modern-input" required>
+        <input type="number" id="withdraw-amount" placeholder="Valor (Min R$10)" min="10" class="modern-input" required>
         <button type="submit" class="btn-confirm full-width">Solicitar</button>
       </form>
       <p id="withdraw-message"></p>
@@ -357,7 +359,7 @@
         <h4 style="color: #3498db;">💰 3. Depósitos e Saques (PIX)</h4>
         <p style="font-size: 0.9em; color: #ddd; margin-top: 5px;">
           <strong>Depósito:</strong> Automático via PIX QR Code. O saldo cai na hora!<br>
-          <strong>Saque:</strong> Solicite a retirada para sua chave PIX. Mínimo de R$ 30,00 (taxa de 30% aplicada no
+          <strong>Saque:</strong> Solicite a retirada para sua chave PIX. Mínimo de R$ 10,00 (taxa de 30% aplicada no
           saque).
         </p>
       </div>
