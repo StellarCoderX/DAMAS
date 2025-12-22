@@ -55,7 +55,9 @@ function startTimer(roomCode) {
         if (room.blackTime <= 0) timeOver = true;
       }
 
-      io.to(roomCode).emit("timerUpdate", {
+      // Timer updates são frequentes e podem criar backlog em redes lentas;
+      // emitir como `volatile` reduz chance de crescimento na fila do socket
+      io.to(roomCode).volatile.emit("timerUpdate", {
         whiteTime: room.whiteTime,
         blackTime: room.blackTime,
         roomCode: roomCode,
@@ -71,7 +73,7 @@ function startTimer(roomCode) {
       }
     }, 1000);
   } else {
-    io.to(roomCode).emit("timerUpdate", {
+    io.to(roomCode).volatile.emit("timerUpdate", {
       timeLeft: room.timeLeft,
       roomCode: roomCode,
       currentPlayer: room.game && room.game.currentPlayer,

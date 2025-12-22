@@ -387,7 +387,9 @@ function sendGameState(roomCode, fullState, opts = {}) {
       try {
         for (const specId of Array.from(room.spectators)) {
           try {
-            io.to(specId).emit("gameStateUpdate", reduced);
+            // spectral updates are non-critical; use volatile to avoid
+            // building a backlog if client/network is slow
+            io.to(specId).volatile.emit("gameStateUpdate", reduced);
           } catch (e) {}
         }
       } catch (e) {}

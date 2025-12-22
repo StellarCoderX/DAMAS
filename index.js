@@ -4,6 +4,7 @@ require("dotenv").config();
 const express = require("express");
 const http = require("http");
 const socketIo = require("socket.io");
+const { monitorEventLoopDelay } = require("perf_hooks");
 const mongoose = require("mongoose");
 const User = require("./models/User");
 const Withdrawal = require("./models/Withdrawal");
@@ -676,6 +677,29 @@ initializeManager(io, gameRooms);
 tournamentManager.initializeTournamentManager(io, gameRooms);
 setTournamentManager(tournamentManager);
 initializeSocket(io);
+
+// --- Monitor simples de event-loop (ajuda a diagnosticar latência do servidor)
+try {
+  if (monitorEventLoopDelay) {
+    const h = monitorEventLoopDelay({ resolution: 20 });
+    h.enable();
+    setInterval(() => {
+      try {
+        const meanMs = (h.mean || 0) / 1e6;
+        const maxMs = (h.max || 0) / 1e6;
+        if (meanMs > 40 || maxMs > 200) {
+          console.warn(
+            `[EventLoopLag] mean=${meanMs.toFixed(1)}ms max=${maxMs.toFixed(
+              1
+            )}ms`
+          );
+        }
+        // reset counters for next interval
+        h.reset();
+      } catch (e) {}
+    }, 10000);
+  }
+} catch (e) {}
 
 // --- ROTINA DE LIMPEZA AUTOMÁTICA DE HISTÓRICO ---
 const CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 Hora em milissegundos
