@@ -226,8 +226,11 @@ window.UI = {
         clone.style.height = `${fromRect.height}px`;
         clone.style.margin = "0";
         clone.style.zIndex = 2147483650;
+        // inicializa com leve elevação/scale para sensação de 'lift'
+        clone.style.transform = "translate(0, -8px) scale(1.02)";
+        clone.style.boxShadow = "0 18px 36px rgba(0,0,0,0.22)";
         clone.style.transition =
-          "transform 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms linear";
+          "transform 360ms cubic-bezier(0.22, 0.8, 0.3, 1), opacity 200ms linear, box-shadow 260ms ease";
         clone.style.pointerEvents = "none";
 
         document.body.appendChild(clone);
@@ -248,10 +251,12 @@ window.UI = {
         // eslint-disable-next-line no-unused-expressions
         clone.getBoundingClientRect();
 
-        // Start animation
+        // Start animation: move to destination and settle scale/vertical offset
         requestAnimationFrame(() => {
           try {
-            clone.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+            clone.style.transform = `translate(${deltaX}px, ${deltaY}px) translateY(0) scale(1)`;
+            // reduz a sombra ao chegar (animação suave via transition)
+            clone.style.boxShadow = "0 10px 22px rgba(0,0,0,0.18)";
           } catch (e) {}
         });
 
@@ -294,13 +299,13 @@ window.UI = {
           cleanUp();
         };
         clone.addEventListener("transitionend", tEnd);
-        // Fallback timeout
+        // Fallback timeout (ligeiramente maior que a duração da transição)
         setTimeout(() => {
           try {
             clone.removeEventListener("transitionend", tEnd);
           } catch (e) {}
           cleanUp();
-        }, 500);
+        }, 800);
       } catch (err) {
         try {
           console.error("animatePieceMove error", err);
