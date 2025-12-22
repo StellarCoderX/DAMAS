@@ -398,6 +398,30 @@ window.initLobby = function (socket, UI) {
       const roomCode = codeInput.value.trim().toUpperCase();
 
       if (roomCode && window.currentUser) {
+        // Se o usuário criou uma sala antes, cancelar imediatamente essa sala
+        try {
+          const myCodeEl = document.getElementById("room-code-display");
+          const myCode = myCodeEl ? myCodeEl.textContent.trim() : null;
+          const waitingArea = document.getElementById("waiting-area");
+          if (
+            waitingArea &&
+            !waitingArea.classList.contains("hidden") &&
+            myCode &&
+            myCode !== "---" &&
+            myCode !== roomCode
+          ) {
+            socket.emit("cancelRoom", { roomCode: myCode });
+            // atualizar UI localmente para resposta imediata
+            waitingArea.classList.add("hidden");
+            const btn = document.getElementById("create-room-btn");
+            if (btn) {
+              btn.disabled = false;
+              btn.textContent = "INICIAR SALA";
+            }
+            tempRoomCode = null;
+          }
+        } catch (e) {}
+
         socket.emit("joinRoomRequest", { roomCode, user: window.currentUser });
       } else {
         alert("Por favor, digite o código da sala.");
@@ -414,6 +438,29 @@ window.initLobby = function (socket, UI) {
       }
       const roomCode = e.target.dataset.roomCode;
       if (roomCode && window.currentUser) {
+        // Se o usuário criou uma sala antes, cancelar imediatamente essa sala
+        try {
+          const myCodeEl = document.getElementById("room-code-display");
+          const myCode = myCodeEl ? myCodeEl.textContent.trim() : null;
+          const waitingArea = document.getElementById("waiting-area");
+          if (
+            waitingArea &&
+            !waitingArea.classList.contains("hidden") &&
+            myCode &&
+            myCode !== "---" &&
+            myCode !== roomCode
+          ) {
+            socket.emit("cancelRoom", { roomCode: myCode });
+            waitingArea.classList.add("hidden");
+            const btn = document.getElementById("create-room-btn");
+            if (btn) {
+              btn.disabled = false;
+              btn.textContent = "INICIAR SALA";
+            }
+            tempRoomCode = null;
+          }
+        } catch (e) {}
+
         socket.emit("joinRoomRequest", { roomCode, user: window.currentUser });
       }
     }
