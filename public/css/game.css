@@ -84,15 +84,79 @@
   cursor: pointer;
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.36),
     inset 0 4px 10px rgba(255, 255, 255, 0.04);
-  transition: transform 0.12s cubic-bezier(0.2, 0.9, 0.3, 1), box-shadow 0.12s;
+  transition: transform 0.12s cubic-bezier(0.2, 0.9, 0.3, 1), box-shadow 0.12s,
+    opacity 0.18s;
   display: flex;
   justify-content: center;
   align-items: center;
   position: relative;
   z-index: 2;
   transform: translateZ(0);
-  will-change: transform;
+  will-change: transform, opacity;
   contain: layout style;
+}
+
+/* Captura: animação suave antes de remover do DOM */
+.capturada {
+  animation: captureEffect 320ms ease-in forwards;
+}
+
+@keyframes captureEffect {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  60% {
+    transform: scale(0.6);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(0.1);
+    opacity: 0;
+  }
+}
+
+/* Indicador de movimento mais elegante (pulso) */
+.indicador-movimento,
+.valid-move-highlight {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+
+.indicador-movimento::after,
+.valid-move-highlight::after {
+  content: "";
+  display: block;
+  position: absolute;
+  width: 30%;
+  height: 30%;
+  background: radial-gradient(
+    circle at 50% 40%,
+    rgba(46, 204, 113, 0.95),
+    rgba(46, 204, 113, 0.6)
+  );
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(46, 204, 113, 0.12);
+  animation: pulse 1.2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .piece::before {

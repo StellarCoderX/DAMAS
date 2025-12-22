@@ -184,75 +184,8 @@ window.UI = {
 
   // --- ANIMAÇÃO DE MOVIMENTO ---
   animatePieceMove: function (from, to, boardSize) {
-    return new Promise((resolve) => {
-      // Tenta pegar do cache, se falhar pega do DOM (Defensivo)
-      let square =
-        (this.boardCache[from.row] && this.boardCache[from.row][from.col]) ||
-        document.querySelector(
-          `.square[data-row="${from.row}"][data-col="${from.col}"]`
-        );
-
-      if (!square) {
-        resolve();
-        return;
-      }
-
-      const piece = square.querySelector(".piece");
-      if (!piece) {
-        resolve();
-        return;
-      }
-
-      const fromRect = square.getBoundingClientRect();
-
-      let toSquare =
-        (this.boardCache[to.row] && this.boardCache[to.row][to.col]) ||
-        document.querySelector(
-          `.square[data-row="${to.row}"][data-col="${to.col}"]`
-        );
-
-      if (!toSquare) {
-        resolve();
-        return;
-      }
-      const toRect = toSquare.getBoundingClientRect();
-
-      let deltaX = toRect.left - fromRect.left;
-      let deltaY = toRect.top - fromRect.top;
-
-      const isFlipped = this.elements.board.classList.contains("board-flipped");
-      if (!piece) return resolve();
-
-      piece.style.willChange = "transform";
-      piece.style.zIndex = 100;
-
-      // Evento de fim de transição para limpeza garantida
-      const onTransitionEnd = (e) => {
-        if (e && e.propertyName !== "transform") return;
-        piece.removeEventListener("transitionend", onTransitionEnd);
-        piece.style.willChange = "auto";
-        piece.style.zIndex = "";
-        piece.style.transition = "";
-        piece.style.transform = "";
-        resolve();
-      };
-
-      requestAnimationFrame(() => {
-        piece.style.transition = "transform 0.15s linear";
-        piece.addEventListener("transitionend", onTransitionEnd);
-
-        // Fallback de segurança
-        setTimeout(() => {
-          onTransitionEnd({ propertyName: "transform" });
-        }, 200);
-
-        if (isFlipped) {
-          piece.style.transform = `rotate(180deg) translate(${deltaX}px, ${deltaY}px)`;
-        } else {
-          piece.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-        }
-      });
-    });
+    // Animação desativada -- resolver imediatamente para movimento instantâneo
+    return Promise.resolve();
   },
 
   // --- RENDERIZAÇÃO ROBUSTA (CORREÇÃO DE PEÇAS INVISÍVEIS) ---
@@ -319,7 +252,27 @@ window.UI = {
             }
           } else {
             if (existingPiece) {
-              existingPiece.remove();
+              // aplica animação de captura e remove após terminar
+              try {
+                // evita reanimar se já estiver em processo
+                if (!existingPiece.classList.contains("capturada")) {
+                  existingPiece.classList.add("capturada");
+                  // garante pintura final antes do setTimeout
+                  requestAnimationFrame(() => {
+                    // remove o elemento após a duração da animação
+                    setTimeout(() => {
+                      try {
+                        if (existingPiece && existingPiece.parentNode)
+                          existingPiece.parentNode.removeChild(existingPiece);
+                      } catch (e) {}
+                    }, 340);
+                  });
+                }
+              } catch (e) {
+                try {
+                  existingPiece.remove();
+                } catch (er) {}
+              }
             }
           }
         }
@@ -834,6 +787,51 @@ window.UI = {
       else timeToShow = data.blackTime;
       this.elements.timerDisplay.textContent = this.formatTime(timeToShow);
     }
+  },
+
+  // --- TOASTS (não bloqueantes) ---
+  showToast: function (message, opts = {}) {
+    try {
+      const type = opts.type || "info"; // info, success, error
+      let container = document.getElementById("ui-toast-container");
+      if (!container) {
+        container = document.createElement("div");
+        container.id = "ui-toast-container";
+        container.style.cssText =
+          "position:fixed;right:16px;top:16px;z-index:999999;display:flex;flex-direction:column;gap:8px;";
+        document.body.appendChild(container);
+      }
+
+      const t = document.createElement("div");
+      t.className = `ui-toast ui-toast-${type}`;
+      t.style.cssText = `min-width:160px;padding:10px 14px;border-radius:8px;color:#fff;font-weight:600;box-shadow:0 8px 20px rgba(0,0,0,0.35);opacity:0;transform:translateY(-8px);transition:all 220ms ease;`;
+      t.textContent = message;
+      if (type === "success")
+        t.style.background = "linear-gradient(90deg,#2ecc71,#27ae60)";
+      else if (type === "error")
+        t.style.background = "linear-gradient(90deg,#e74c3c,#c0392b)";
+      else t.style.background = "linear-gradient(90deg,#3498db,#2c82c9)";
+
+      container.appendChild(t);
+      // enter
+      requestAnimationFrame(() => {
+        t.style.opacity = "1";
+        t.style.transform = "translateY(0)";
+      });
+
+      const duration = opts.duration || 3600;
+      setTimeout(() => {
+        try {
+          t.style.opacity = "0";
+          t.style.transform = "translateY(-8px)";
+          setTimeout(() => {
+            try {
+              if (t && t.parentNode) t.parentNode.removeChild(t);
+            } catch (e) {}
+          }, 260);
+        } catch (e) {}
+      }, duration);
+    } catch (e) {}
   },
 
   formatTime: function (seconds) {
