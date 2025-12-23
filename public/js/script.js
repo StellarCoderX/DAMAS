@@ -286,6 +286,10 @@ document.addEventListener("DOMContentLoaded", () => {
             const rtt = Date.now() - ts;
             clearTimeout(timeoutId);
             updatePingIndicator(rtt);
+            try {
+              // send lightweight telemetry to server for diagnostics
+              socket.emit("clientTelemetry", { rtt });
+            } catch (e) {}
           } catch (e) {}
         });
       } catch (e) {}

@@ -28,11 +28,34 @@ const {
 
 // Referência ao tournamentManager para encerrar partidas de torneio programaticamente
 const tournamentManager = require("./tournamentManager");
+const { enqueue } = require("./jobQueue");
 
 const gameRooms = {};
 let io; // Variável global para instância do Socket.IO
 // Contador simples para razões de desconexão (diagnóstico)
 const disconnectReasonCounts = {};
+
+// Debounced/Throttled lobby update to avoid emitting too frequentemente
+let _lobbyUpdateTimer = null;
+let _lastLobbyPayload = null;
+function scheduleLobbyUpdate(force) {
+  try {
+    _lastLobbyPayload = getLobbyInfo();
+    if (force) {
+      if (io) io.volatile.emit("updateLobby", _lastLobbyPayload);
+      return;
+    }
+    if (_lobbyUpdateTimer) return; // já agendado
+    _lobbyUpdateTimer = setTimeout(() => {
+      try {
+        if (io && _lastLobbyPayload)
+          io.volatile.emit("updateLobby", _lastLobbyPayload);
+      } catch (e) {}
+      _lobbyUpdateTimer = null;
+      _lastLobbyPayload = null;
+    }, 300); // debounce 300ms
+  } catch (e) {}
+}
 
 function getLobbyInfo() {
   const waitingRooms = Object.values(gameRooms)
@@ -345,7 +368,7 @@ function cleanupPreviousRooms(userEmail) {
   });
 
   if (roomsToRemove.length > 0 && io) {
-    io.emit("updateLobby", getLobbyInfo());
+    scheduleLobbyUpdate();
   }
 }
 
@@ -672,7 +695,7 @@ async function startGameLogic(room) {
   if (blackPlayer && blackPlayer.socketId)
     io.to(blackPlayer.socketId).emit("gameStart", gameState);
   // notify current spectator count to all in room
-  io.to(room.roomCode).emit("spectatorCount", {
+  io.to(room.roomCode).volatile.emit("spectatorCount", {
     count: room.spectators ? room.spectators.size : 0,
   });
 
@@ -744,17 +767,20 @@ async function startGameLogic(room) {
           // Save a single MatchHistory entry marking the refund
           if (typeof MatchHistory !== "undefined") {
             try {
-              await MatchHistory.create({
-                player1: playersEmails[0] || "",
-                player2: playersEmails[1] || "",
-                winner: null,
-                bet: currentRoom.bet,
-                gameMode: currentRoom.gameMode || "classic",
-                reason: "Partida inativa (nenhum lance) - reembolso",
-                createdAt: new Date(),
+              // Enfileira a gravação serializável para não bloquear o watchdog
+              enqueue({
+                type: "saveMatchHistory",
+                payload: {
+                  player1: playersEmails[0] || "",
+                  player2: playersEmails[1] || "",
+                  winner: null,
+                  bet: currentRoom.bet,
+                  gameMode: currentRoom.gameMode || "classic",
+                  reason: "Partida inativa (nenhum lance) - reembolso",
+                },
               });
             } catch (eh) {
-              console.error("Failed to save refund MatchHistory:", eh);
+              console.error("Failed to enqueue refund MatchHistory:", eh);
             }
           }
 
@@ -769,7 +795,7 @@ async function startGameLogic(room) {
             );
           } catch (e) {}
           delete gameRooms[room.roomCode];
-          if (io) io.emit("updateLobby", getLobbyInfo());
+          scheduleLobbyUpdate();
         }
       } catch (err) {
         console.error("Error in firstMove timeout handler:", err);
@@ -1314,7 +1340,10 @@ function initializeSocket(ioInstance) {
   io.on("connection", (socket) => {
     socket.on("enterLobby", (user) => {
       if (user) socket.userData = user;
-      socket.emit("updateLobby", getLobbyInfo());
+      // send immediate lobby snapshot to this socket (non-batched)
+      try {
+        socket.emit("updateLobby", getLobbyInfo());
+      } catch (e) {}
     });
 
     // Lightweight ping/pong for client RTT measurement
@@ -1322,9 +1351,17 @@ function initializeSocket(ioInstance) {
       try {
         // Echo back the same timestamp so client can compute RTT
         socket.emit("pongCheck", clientTs);
-      } catch (e) {
-        console.error("Error responding to pingCheck:", e);
-      }
+      } catch (e) {}
+    });
+
+    // Client telemetry: optionally receive client latency report
+    socket.on("clientTelemetry", (payload) => {
+      try {
+        // store last known RTT for diagnostics (not persisted)
+        if (!socket.userData) socket.userData = {};
+        socket.userData.lastLatency =
+          payload && payload.rtt ? payload.rtt : null;
+      } catch (e) {}
     });
 
     socket.on("joinAsSpectator", ({ roomCode }) => {
@@ -1445,7 +1482,7 @@ function initializeSocket(ioInstance) {
           });
 
           // Notify room about updated spectator count
-          io.to(roomCode).emit("spectatorCount", {
+          io.to(roomCode).volatile.emit("spectatorCount", {
             count: room.spectators ? room.spectators.size : 0,
           });
 
@@ -1522,7 +1559,7 @@ function initializeSocket(ioInstance) {
       };
 
       socket.emit("roomCreated", { roomCode });
-      io.emit("updateLobby", getLobbyInfo());
+      scheduleLobbyUpdate();
     });
 
     socket.on("joinRoomRequest", async (data) => {
@@ -1611,7 +1648,7 @@ function initializeSocket(ioInstance) {
           try {
             delete gameRooms[roomCode];
           } catch (e) {}
-          if (io) io.emit("updateLobby", getLobbyInfo());
+          scheduleLobbyUpdate();
           socket.emit("joinError", {
             message: "Criador ausente. Sala removida.",
           });
@@ -1638,7 +1675,7 @@ function initializeSocket(ioInstance) {
           );
         } catch (e) {}
         delete gameRooms[roomCode];
-        io.emit("updateLobby", getLobbyInfo());
+        scheduleLobbyUpdate();
         return;
       }
 
@@ -1704,7 +1741,7 @@ function initializeSocket(ioInstance) {
       }
 
       await startGameLogic(room);
-      io.emit("updateLobby", getLobbyInfo());
+      scheduleLobbyUpdate();
     });
 
     socket.on("requestGameSync", (data) => {
@@ -1760,7 +1797,7 @@ function initializeSocket(ioInstance) {
         } catch (e) {}
         delete gameRooms[roomCode];
         socket.emit("roomCancelled");
-        io.emit("updateLobby", getLobbyInfo());
+        scheduleLobbyUpdate();
       }
     });
 
@@ -1966,7 +2003,7 @@ function initializeSocket(ioInstance) {
         const room = gameRooms[specRoomCode];
         try {
           room.spectators.delete(socket.id);
-          io.to(specRoomCode).emit("spectatorCount", {
+          io.to(specRoomCode).volatile.emit("spectatorCount", {
             count: room.spectators ? room.spectators.size : 0,
           });
         } catch (e) {
@@ -2044,7 +2081,7 @@ function initializeSocket(ioInstance) {
             try {
               if (gameRooms[roomCode]) {
                 delete gameRooms[roomCode];
-                if (io) io.emit("updateLobby", getLobbyInfo());
+                scheduleLobbyUpdate();
               }
             } catch (e) {
               console.error("Error removing room after disconnect end:", e);
@@ -2067,13 +2104,13 @@ function initializeSocket(ioInstance) {
                   );
                 } catch (e) {}
                 delete gameRooms[roomCode];
-                if (io) io.emit("updateLobby", getLobbyInfo());
+                scheduleLobbyUpdate();
               } catch (e) {
                 console.error("Error cleaning up private room:", e);
               }
             }, 30 * 60 * 1000);
             // notify lobby so UI shows private room still available (optional)
-            io.emit("updateLobby", getLobbyInfo());
+            scheduleLobbyUpdate();
           } catch (e) {
             console.error("Error scheduling cleanup for private room:", e);
           }
@@ -2087,7 +2124,7 @@ function initializeSocket(ioInstance) {
               try {
                 if (gameRooms[roomCode]) {
                   delete gameRooms[roomCode];
-                  if (io) io.emit("updateLobby", getLobbyInfo());
+                  scheduleLobbyUpdate();
                   console.log(
                     `[Socket] cleanup: removed room ${roomCode} after idle timeout`
                   );
@@ -2097,7 +2134,7 @@ function initializeSocket(ioInstance) {
               }
             }, WAIT_TIME * 1000);
             // Notifica lobby que há mudança (mostra sala como aguardando/ausente)
-            if (io) io.emit("updateLobby", getLobbyInfo());
+            scheduleLobbyUpdate();
           } catch (e) {
             console.error(
               "Error scheduling cleanup for room after disconnect:",
@@ -2205,7 +2242,7 @@ function initializeSocket(ioInstance) {
                     // Apenas remove se a sala ainda estiver concluída (não foi reiniciada)
                     if (gameRooms[roomCode].isGameConcluded) {
                       delete gameRooms[roomCode];
-                      if (io) io.emit("updateLobby", getLobbyInfo());
+                      scheduleLobbyUpdate();
                       console.log(
                         `[${new Date().toISOString()}] [acceptDraw] Removido room ${roomCode} após agendamento`
                       );
@@ -2410,7 +2447,7 @@ function initializeSocket(ioInstance) {
         // If non-player leaving (likely spectator), remove from spectators set
         if (room.spectators && room.spectators.has(socket.id)) {
           room.spectators.delete(socket.id);
-          io.to(roomCode).emit("spectatorCount", {
+          io.to(roomCode).volatile.emit("spectatorCount", {
             count: room.spectators ? room.spectators.size : 0,
           });
         }

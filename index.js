@@ -6,6 +6,12 @@ const http = require("http");
 const socketIo = require("socket.io");
 const { monitorEventLoopDelay } = require("perf_hooks");
 const mongoose = require("mongoose");
+
+// Metrics and monitoring holders
+let eventLoopMonitorHandle = null;
+const serverMetrics = {
+  eventLoop: { meanMs: 0, maxMs: 0 },
+};
 const User = require("./models/User");
 const Withdrawal = require("./models/Withdrawal");
 const MatchHistory = require("./models/MatchHistory");
@@ -47,6 +53,30 @@ const io = socketIo(server, {
   },
 });
 
+// If REDIS_URL is provided, configure Socket.IO Redis adapter for horizontal scaling
+try {
+  const REDIS_URL = process.env.REDIS_URL;
+  if (REDIS_URL) {
+    const { createAdapter } = require("@socket.io/redis-adapter");
+    const { createClient } = require("redis");
+    const pubClient = createClient({ url: REDIS_URL });
+    const subClient = pubClient.duplicate();
+    Promise.all([pubClient.connect(), subClient.connect()])
+      .then(() => {
+        io.adapter(createAdapter(pubClient, subClient));
+        console.log("Socket.IO Redis adapter enabled");
+      })
+      .catch((e) => {
+        try {
+          console.warn(
+            "Failed to connect Redis for Socket.IO adapter, continuing without adapter:",
+            e
+          );
+        } catch (er) {}
+      });
+  }
+} catch (e) {}
+
 const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URI;
 
@@ -65,6 +95,16 @@ mongoose
   .connect(MONGO_URI)
   .then(() => console.log("Conectado ao MongoDB Atlas com sucesso!"))
   .catch((err) => console.error("Erro ao conectar ao MongoDB:", err));
+
+// Carrega handlers locais para jobs serializáveis (processamento in-memory quando não há Redis).
+try {
+  const jobHandlers = require("./src/jobHandlers");
+  if (jobHandlers && jobHandlers.processJob) {
+    console.log("Local job handlers loaded");
+  }
+} catch (e) {
+  console.warn("Could not load local job handlers:", e);
+}
 
 // --- ROTAS DE API ---
 
@@ -681,12 +721,14 @@ initializeSocket(io);
 // --- Monitor simples de event-loop (ajuda a diagnosticar latência do servidor)
 try {
   if (monitorEventLoopDelay) {
-    const h = monitorEventLoopDelay({ resolution: 20 });
-    h.enable();
+    eventLoopMonitorHandle = monitorEventLoopDelay({ resolution: 20 });
+    eventLoopMonitorHandle.enable();
     setInterval(() => {
       try {
-        const meanMs = (h.mean || 0) / 1e6;
-        const maxMs = (h.max || 0) / 1e6;
+        const meanMs = (eventLoopMonitorHandle.mean || 0) / 1e6;
+        const maxMs = (eventLoopMonitorHandle.max || 0) / 1e6;
+        serverMetrics.eventLoop.meanMs = meanMs;
+        serverMetrics.eventLoop.maxMs = maxMs;
         if (meanMs > 40 || maxMs > 200) {
           console.warn(
             `[EventLoopLag] mean=${meanMs.toFixed(1)}ms max=${maxMs.toFixed(
@@ -695,11 +737,33 @@ try {
           );
         }
         // reset counters for next interval
-        h.reset();
+        eventLoopMonitorHandle.reset();
       } catch (e) {}
     }, 10000);
   }
 } catch (e) {}
+
+// Lightweight metrics endpoint for diagnostics
+app.get("/metrics", async (req, res) => {
+  try {
+    const payload = { ...serverMetrics, clients: [] };
+    if (io && io.fetchSockets) {
+      try {
+        const sockets = await io.fetchSockets();
+        payload.clients = sockets.map((s) => ({
+          id: s.id,
+          lastLatency:
+            s.userData && s.userData.lastLatency
+              ? s.userData.lastLatency
+              : null,
+        }));
+      } catch (e) {}
+    }
+    res.json(payload);
+  } catch (err) {
+    res.status(500).json({ error: "metrics error" });
+  }
+});
 
 // --- ROTINA DE LIMPEZA AUTOMÁTICA DE HISTÓRICO ---
 const CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 Hora em milissegundos

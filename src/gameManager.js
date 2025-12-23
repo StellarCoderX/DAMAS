@@ -118,23 +118,29 @@ function resetTimer(roomCode) {
   }
 }
 
+const { enqueue } = require("./jobQueue");
+
 async function saveMatchHistory(room, winnerEmail, reason) {
   try {
     const p1Email = room.players[0].user.email;
     const p2Email = room.players[1].user.email;
 
-    const history = new MatchHistory({
-      player1: p1Email,
-      player2: p2Email,
-      winner: winnerEmail || null,
-      bet: room.bet,
-      gameMode: room.gameMode,
-      reason: reason,
+    // Enfileira uma tarefa serializável para ser processada por worker/fila.
+    enqueue({
+      type: "saveMatchHistory",
+      payload: {
+        player1: p1Email,
+        player2: p2Email,
+        winner: winnerEmail || null,
+        bet: room.bet,
+        gameMode: room.gameMode,
+        reason: reason,
+      },
     });
-
-    await history.save();
   } catch (err) {
-    console.error("Erro ao salvar histórico:", err);
+    try {
+      console.error("Erro ao enfileirar histórico:", err);
+    } catch (e) {}
   }
 }
 
@@ -151,11 +157,7 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
           now - room._lastEndTimestamp
         }ms) reason=${reason}`
       );
-      try {
-        console.trace(
-          `Ignored duplicate processEndOfGame for room=${room.roomCode}`
-        );
-      } catch (e) {}
+      // debug trace removed to reduce overhead in hot path
       return;
     }
     room._lastEndTimestamp = now;
@@ -166,22 +168,14 @@ async function processEndOfGame(winnerColor, loserColor, room, reason) {
     console.log(
       `[processEndOfGame] room=${room.roomCode} already processing end -> ignoring duplicate call. reason=${reason}`
     );
-    try {
-      console.trace(
-        `Duplicate processEndOfGame call for room=${room.roomCode} reason=${reason}`
-      );
-    } catch (e) {}
+    // debug trace removed to reduce overhead in hot path
     return;
   }
 
   // mark processing and log entry stack to help debugging race conditions
   room._endProcessing = true;
   try {
-    try {
-      console.trace(
-        `processEndOfGame ENTRY room=${room.roomCode} reason=${reason}`
-      );
-    } catch (e) {}
+    // entry trace removed to reduce log noise
     if (room.isGameConcluded) {
       return;
     }
