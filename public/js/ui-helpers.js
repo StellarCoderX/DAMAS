@@ -226,11 +226,11 @@ window.UI = {
         clone.style.height = `${fromRect.height}px`;
         clone.style.margin = "0";
         clone.style.zIndex = 2147483650;
-        // inicializa com elevação/scale para sensação de 'lift' (match admin)
-        clone.style.transform = "translate(0, -10px) scale(1.06)";
+        // inicializa sem efeito de flutuar (sem translate/scale)
+        clone.style.transform = "translate(0, 0) scale(1)";
         clone.style.boxShadow = "0 24px 48px rgba(0,0,0,0.26)";
         clone.style.transition =
-          "transform 420ms cubic-bezier(0.22, 0.8, 0.3, 1), opacity 220ms linear, box-shadow 320ms ease";
+          "transform 360ms cubic-bezier(0.22, 0.8, 0.3, 1), opacity 220ms linear, box-shadow 320ms ease";
         clone.style.pointerEvents = "none";
 
         document.body.appendChild(clone);
@@ -254,7 +254,7 @@ window.UI = {
         // Start animation: move to destination and settle scale/vertical offset
         requestAnimationFrame(() => {
           try {
-            clone.style.transform = `translate(${deltaX}px, ${deltaY}px) translateY(0) scale(1)`;
+            clone.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(1)`;
             // reduz a sombra ao chegar (animação suave via transition)
             clone.style.boxShadow = "0 12px 30px rgba(0,0,0,0.18)";
           } catch (e) {}
