@@ -353,9 +353,9 @@ window.initLobby = function (socket, UI) {
       const timerSelect = document.getElementById("timer-select");
       const timerDuration = timerSelect ? timerSelect.value : 40;
 
-      // Nota: criação de salas privadas está temporariamente desativada no cliente
-      // Ignora qualquer checkbox e força isPrivate = false para evitar criação
-      const isPrivate = false;
+      // Lê checkbox de sala privada para enviar ao servidor
+      const privateCheckbox = document.getElementById("private-room-checkbox");
+      const isPrivate = !!(privateCheckbox && privateCheckbox.checked);
 
       if (bet > 0 && window.currentUser) {
         socket.emit("createRoom", {
