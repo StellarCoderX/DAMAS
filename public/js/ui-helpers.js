@@ -226,11 +226,11 @@ window.UI = {
         clone.style.height = `${fromRect.height}px`;
         clone.style.margin = "0";
         clone.style.zIndex = 2147483650;
-        // inicializa com leve elevação/scale para sensação de 'lift'
-        clone.style.transform = "translate(0, -8px) scale(1.02)";
-        clone.style.boxShadow = "0 18px 36px rgba(0,0,0,0.22)";
+        // inicializa com elevação/scale para sensação de 'lift' (match admin)
+        clone.style.transform = "translate(0, -10px) scale(1.06)";
+        clone.style.boxShadow = "0 24px 48px rgba(0,0,0,0.26)";
         clone.style.transition =
-          "transform 360ms cubic-bezier(0.22, 0.8, 0.3, 1), opacity 200ms linear, box-shadow 260ms ease";
+          "transform 420ms cubic-bezier(0.22, 0.8, 0.3, 1), opacity 220ms linear, box-shadow 320ms ease";
         clone.style.pointerEvents = "none";
 
         document.body.appendChild(clone);
@@ -256,7 +256,7 @@ window.UI = {
           try {
             clone.style.transform = `translate(${deltaX}px, ${deltaY}px) translateY(0) scale(1)`;
             // reduz a sombra ao chegar (animação suave via transition)
-            clone.style.boxShadow = "0 10px 22px rgba(0,0,0,0.18)";
+            clone.style.boxShadow = "0 12px 30px rgba(0,0,0,0.18)";
           } catch (e) {}
         });
 
@@ -306,6 +306,12 @@ window.UI = {
           } catch (e) {}
           cleanUp();
         }, 800);
+        // Safety additional timeout in case of slow devices
+        setTimeout(() => {
+          try {
+            cleanUp();
+          } catch (e) {}
+        }, 1400);
       } catch (err) {
         try {
           console.error("animatePieceMove error", err);
