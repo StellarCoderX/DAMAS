@@ -186,7 +186,10 @@ window.GameCore = (function () {
                   await state.UI.animatePieceMove(
                     from,
                     to,
-                    payload.boardSize || state.currentBoardSize
+                    payload.boardSize || state.currentBoardSize,
+                    payload.captured && payload.captured.length > 0
+                      ? payload.captured
+                      : undefined
                   );
                 }
               } catch (e) {}
@@ -468,7 +471,7 @@ window.GameCore = (function () {
       }
     }
 
-    await state.UI.animatePieceMove(from, to, state.currentBoardSize);
+    await state.UI.animatePieceMove(from, to, state.currentBoardSize, capturedPos);
 
     state.UI.renderPieces(state.boardState, state.currentBoardSize);
     state.UI.clearHighlights();

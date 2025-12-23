@@ -183,7 +183,7 @@ window.UI = {
   },
 
   // --- ANIMAÇÃO DE MOVIMENTO ---
-  animatePieceMove: function (from, to, boardSize) {
+  animatePieceMove: function (from, to, boardSize, capturedPos) {
     return new Promise((resolve) => {
       try {
         const boardEl =
@@ -208,9 +208,32 @@ window.UI = {
         const isCapture = Math.max(distRow, distCol) > 1;
         if (isCapture) {
           try {
+            // Remove visual da(s) peça(s) capturada(s) imediatamente
+            if (capturedPos) {
+              // pode ser objeto único ou array
+              const list = Array.isArray(capturedPos)
+                ? capturedPos
+                : [capturedPos];
+              list.forEach((p) => {
+                try {
+                  const sq = document.querySelector(
+                    `.square[data-row="${p.row}"][data-col="${p.col}"]`
+                  );
+                  if (sq) {
+                    const el = sq.querySelector(".piece");
+                    if (el) {
+                      try {
+                        el.parentNode.removeChild(el);
+                      } catch (e) {
+                        el.style.display = "none";
+                      }
+                    }
+                  }
+                } catch (e) {}
+              });
+            }
             // Move elemento diretamente no DOM sem animação
             if (pieceEl && toSquare) {
-              // remove peça da origem e anexa no destino
               try {
                 fromSquare.removeChild(pieceEl);
               } catch (e) {}
