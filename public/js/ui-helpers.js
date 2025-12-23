@@ -581,51 +581,29 @@ window.UI = {
           if (!square) continue; // Se realmente não existir, pula
 
           const pieceType = boardState[row][col];
-          const existingPiece = square.querySelector(".piece") || null;
+
+          // Defensive: remove all existing .piece elements in this square
+          try {
+            const existingPieces = Array.from(square.querySelectorAll('.piece'));
+            if (existingPieces.length > 0) {
+              existingPieces.forEach((el) => {
+                try { el.remove(); } catch (e) { try { if (el.parentNode) el.parentNode.removeChild(el); } catch (er) { el.style.display = 'none'; } }
+              });
+            }
+          } catch (e) {}
 
           if (pieceType !== 0) {
             const isBlack = pieceType.toString().toLowerCase() === "p";
             const isKing = pieceType === "P" || pieceType === "B";
             const classColor = isBlack ? "black-piece" : "white-piece";
 
-            if (existingPiece) {
-              // Atualiza peça existente
-              const currentClass = isBlack ? "black-piece" : "white-piece";
-              if (!existingPiece.classList.contains(currentClass)) {
-                existingPiece.className = `piece ${classColor}`;
-              }
-
-              if (isKing) {
-                if (!existingPiece.classList.contains("king"))
-                  existingPiece.classList.add("king");
-              } else {
-                if (existingPiece.classList.contains("king"))
-                  existingPiece.classList.remove("king");
-              }
-
-              // Garante que a peça esteja visível e resetada
-              existingPiece.style.transform = "";
-              existingPiece.style.transition = "";
-              existingPiece.style.opacity = "1";
-            } else {
-              // Cria nova peça
+            // Cria exatamente uma peça por casa conforme o estado
+            try {
               const piece = document.createElement("div");
               piece.className = `piece ${classColor}`;
               if (isKing) piece.classList.add("king");
               square.appendChild(piece);
-            }
-          } else {
-            if (existingPiece) {
-              // Remoção imediata da peça capturada sem animação
-              try {
-                if (existingPiece && existingPiece.parentNode)
-                  existingPiece.parentNode.removeChild(existingPiece);
-              } catch (e) {
-                try {
-                  existingPiece.remove();
-                } catch (er) {}
-              }
-            }
+            } catch (e) {}
           }
         }
       }
