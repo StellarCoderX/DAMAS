@@ -517,6 +517,35 @@ window.GameCore = (function () {
     state.selectedPiece = null;
   }
 
+  // Aguarda confirmação do servidor para um moveId otimista previamente enviado.
+  function waitForMoveAck(moveId, timeoutMs = 5000) {
+    return new Promise((resolve) => {
+      const start = Date.now();
+      const iv = setInterval(() => {
+        // Se lastOptimisticMove for null, significa que o servidor confirmou
+        // (o handler de pieceMoved limpa esse campo quando reconhece moveId).
+        if (!state.lastOptimisticMove) {
+          clearInterval(iv);
+          resolve(true);
+          return;
+        }
+        // Se mudou para outro moveId, também consideramos confirmado/seguimos
+        if (
+          state.lastOptimisticMove &&
+          state.lastOptimisticMove.moveId !== moveId
+        ) {
+          clearInterval(iv);
+          resolve(true);
+          return;
+        }
+        if (Date.now() - start > timeoutMs) {
+          clearInterval(iv);
+          resolve(false);
+        }
+      }, 100);
+    });
+  }
+
   // --- INTERAÇÃO COM TABULEIRO ---
   function handleBoardClick(e) {
     if (window.isSpectator || state.isReplaying) return;
@@ -590,13 +619,64 @@ window.GameCore = (function () {
     }
   }
 
-  function selectPieceLogic(pieceElement, row, col) {
+  async function selectPieceLogic(pieceElement, row, col) {
     state.UI.clearHighlights();
     pieceElement.classList.add("selected");
     state.selectedPiece = { element: pieceElement, row, col };
+    // Se existirem sequências ótimas de captura, execute-as sequencialmente
+    try {
+      if (
+        window.gameLogic &&
+        typeof window.gameLogic.findBestCaptureMoves === "function"
+      ) {
+        const tempGame = {
+          boardState: state.boardState,
+          boardSize: state.currentBoardSize,
+          currentPlayer: state.myColor,
+          mustCaptureWith: null,
+          turnCapturedPieces: state.currentTurnCapturedPieces || [],
+        };
+        const bestCaptures = window.gameLogic.findBestCaptureMoves(
+          state.myColor,
+          tempGame
+        );
+        const capturesForPiece = bestCaptures.filter(
+          (seq) => seq[0] && seq[0].row === row && seq[0].col === col
+        );
+        if (capturesForPiece.length > 0) {
+          capturesForPiece.sort((a, b) => b.length - a.length);
+          const chosenSeq = capturesForPiece[0];
+
+          // Executa cada salto da sequência, aguardando confirmação do servidor
+          let curFrom = { row: chosenSeq[0].row, col: chosenSeq[0].col };
+          for (let i = 1; i < chosenSeq.length; i++) {
+            const dest = chosenSeq[i];
+            const moveId =
+              Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+            try {
+              await performOptimisticMove(curFrom, dest, moveId);
+            } catch (e) {}
+            state.socket.emit("playerMove", {
+              from: { row: curFrom.row, col: curFrom.col },
+              to: dest,
+              room: state.currentRoom,
+              moveId: moveId,
+            });
+
+            const ok = await waitForMoveAck(moveId, 5000);
+            if (!ok) break;
+            // pequeno delay visual
+            await new Promise((r) => setTimeout(r, 150));
+
+            curFrom = { row: dest.row, col: dest.col };
+          }
+          return;
+        }
+      }
+    } catch (e) {}
 
     if (window.gameLogic && window.gameLogic.getUniqueCaptureMove) {
-      const tempGame = {
+      const tempGame2 = {
         boardState: state.boardState,
         boardSize: state.currentBoardSize,
         currentPlayer: state.myColor,
@@ -607,7 +687,7 @@ window.GameCore = (function () {
       const uniqueMove = window.gameLogic.getUniqueCaptureMove(
         row,
         col,
-        tempGame
+        tempGame2
       );
       if (uniqueMove) {
         const moveId =
@@ -625,6 +705,7 @@ window.GameCore = (function () {
         return;
       }
     }
+
     state.socket.emit("getValidMoves", {
       row,
       col,
