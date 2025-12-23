@@ -116,6 +116,39 @@
   }
 }
 
+/* Fade utilitário para remoção suave (usado em capturas) */
+.piece.fade-out {
+  transition: opacity 200ms linear;
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+/* Fade-in utilizado quando a peça chega ao destino após captura */
+.piece.fade-in {
+  transition: opacity 180ms linear;
+  opacity: 1;
+}
+
+/* Marcador de escolha de captura (círculo verde no centro) */
+.capture-choice {
+  position: absolute;
+  width: 64%;
+  height: 64%;
+  border-radius: 50%;
+  background: rgba(46, 204, 113, 0.95);
+  box-shadow: 0 6px 18px rgba(46, 204, 113, 0.18);
+  top: 18%;
+  left: 18%;
+  z-index: 12;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* Visual helper: when a square has a capture choice, give it a subtle hover */
+.square[data-capture-choice="true"]:hover {
+  outline: 2px solid rgba(46, 204, 113, 0.12);
+}
+
 /* Indicador de movimento mais elegante (pulso) */
 .indicador-movimento,
 .valid-move-highlight {

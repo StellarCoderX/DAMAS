@@ -110,7 +110,6 @@ window.UI = {
 
     // debug button removed for production
   },
-  
 
   // Força o desbloqueio de áudio via interação do usuário.
   enableSound: async function () {
@@ -187,7 +186,7 @@ window.UI = {
 
   // --- ANIMAÇÃO DE MOVIMENTO ---
   animatePieceMove: function (from, to, boardSize, capturedPos) {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       try {
         const boardEl =
           this.elements && this.elements.board
@@ -225,7 +224,7 @@ window.UI = {
               } catch (e) {}
             }
 
-            // Remove visual da(s) peça(s) capturada(s) imediatamente de forma robusta
+            // Remove visual da(s) peça(s) capturada(s) com animação de fade
             if (capturedPos) {
               const list = Array.isArray(capturedPos)
                 ? capturedPos
@@ -254,32 +253,73 @@ window.UI = {
                 }
               } catch (e) {}
 
+              // animação: adiciona classe de fade e espera transições antes de
+              // remover os elementos do DOM — evita overlap visual
+              const removalPromises = [];
               list.forEach((p) => {
                 try {
                   const sq = document.querySelector(
                     `.square[data-row="${p.row}"][data-col="${p.col}"]`
                   );
-                  if (sq) {
-                    // Remove todas as peças que possam existir nesta casa
-                    const pieces = Array.from(sq.querySelectorAll(".piece"));
-                    pieces.forEach((el) => {
-                      try {
-                        el.remove();
-                      } catch (e) {
-                        try {
-                          if (el.parentNode) el.parentNode.removeChild(el);
-                        } catch (er) {
-                          el.style.display = "none";
-                        }
-                      }
-                    });
-                    // Limpa qualquer conteúdo remanescente (fallback seguro)
+                  if (!sq) return;
+                  const pieces = Array.from(sq.querySelectorAll(".piece"));
+                  pieces.forEach((el) => {
                     try {
-                      if (sq.children.length === 0) sq.innerHTML = "";
-                    } catch (e) {}
-                  }
+                      const pr = new Promise((res) => {
+                        let done = false;
+                        const clean = () => {
+                          if (done) return;
+                          done = true;
+                          try {
+                            if (el.parentNode) el.parentNode.removeChild(el);
+                          } catch (er) {
+                            try {
+                              el.remove();
+                            } catch (er2) {
+                              el.style.display = "none";
+                            }
+                          }
+                          res();
+                        };
+
+                        // start fade-out
+                        try {
+                          el.classList.add("fade-out");
+                        } catch (er) {}
+
+                        const tEnd = (ev) => {
+                          if (ev && ev.target !== el) return;
+                          try {
+                            el.removeEventListener("transitionend", tEnd);
+                          } catch (er) {}
+                          clean();
+                        };
+                        el.addEventListener("transitionend", tEnd);
+
+                        // fallback timeout
+                        setTimeout(() => {
+                          try {
+                            el.removeEventListener("transitionend", tEnd);
+                          } catch (er) {}
+                          clean();
+                        }, 420);
+                      });
+                      removalPromises.push(pr);
+                    } catch (e) {
+                      try {
+                        if (el.parentNode) el.parentNode.removeChild(el);
+                      } catch (er) {
+                        el.style.display = "none";
+                      }
+                    }
+                  });
                 } catch (e) {}
               });
+
+              // espera todas as remoções (fades) completarem antes de mover a peça
+              try {
+                await Promise.all(removalPromises);
+              } catch (e) {}
 
               // DEBUG: inspeciona DOM depois da remoção
               try {
@@ -306,30 +346,14 @@ window.UI = {
               } catch (e) {}
             }
 
-            // Move elemento diretamente no DOM sem animação. Se não existir
-            // element original, cria fallback minimal.
+            // Move elemento no DOM com fade-in após as peças capturadas desaparecerem
             if (pieceEl && toSquare) {
               try {
-                // Proteção: se pieceEl está realmente dentro de fromSquare
                 if (pieceEl.parentNode === fromSquare)
                   fromSquare.removeChild(pieceEl);
               } catch (e) {}
-              try {
-                // DEBUG: estado do destino antes de anexar
-                try {
-                  if (window.__CLIENT_DEBUG) {
-                    const before = toSquare.querySelectorAll(".piece").length;
-                    console.log(
-                      "[ANIM DEBUG] appending moving piece - dest before",
-                      { from, to },
-                      "count",
-                      before,
-                      "toSquare",
-                      toSquare
-                    );
-                  }
-                } catch (e) {}
 
+              try {
                 // Remove quaisquer peças remanescentes no destino para evitar overlap
                 try {
                   const existing = Array.from(
@@ -348,21 +372,48 @@ window.UI = {
                   });
                 } catch (e) {}
 
-                toSquare.appendChild(pieceEl);
-                pieceEl.style.visibility = "";
+                // Prepara peça para fade-in (simples: só opacidade)
                 try {
-                  if (window.__CLIENT_DEBUG) {
-                    const after = toSquare.querySelectorAll(".piece").length;
-                    console.log(
-                      "[ANIM DEBUG] appending moving piece - dest after",
-                      { from, to },
-                      "count",
-                      after
-                    );
-                  }
+                  pieceEl.style.transition = "opacity 200ms linear";
+                  pieceEl.style.opacity = "0";
                 } catch (e) {}
+
+                toSquare.appendChild(pieceEl);
+
+                // Force reflow then fade-in
+                // eslint-disable-next-line no-unused-expressions
+                pieceEl.getBoundingClientRect();
+                requestAnimationFrame(() => {
+                  try {
+                    pieceEl.style.opacity = "1";
+                    // remove a classe fade-out caso venha de fallback
+                    pieceEl.classList.remove("fade-out");
+                  } catch (e) {}
+                });
+
+                const t2 = (ev) => {
+                  if (ev && ev.target !== pieceEl) return;
+                  try {
+                    pieceEl.removeEventListener("transitionend", t2);
+                  } catch (e) {}
+                  // limpa estilos inline que usamos apenas para a transição
+                  try {
+                    pieceEl.style.transition = "";
+                    pieceEl.style.opacity = "";
+                  } catch (e) {}
+                };
+                pieceEl.addEventListener("transitionend", t2);
+                // fallback timeout
+                setTimeout(() => {
+                  try {
+                    pieceEl.removeEventListener("transitionend", t2);
+                  } catch (e) {}
+                  try {
+                    pieceEl.style.transition = "";
+                    pieceEl.style.opacity = "";
+                  } catch (e) {}
+                }, 420);
               } catch (e) {
-                // fallback: cria peça no destino
                 try {
                   const fallback = document.createElement("div");
                   const cls =
@@ -375,7 +426,23 @@ window.UI = {
               try {
                 const fallback = document.createElement("div");
                 fallback.className = "piece black-piece";
+                fallback.style.opacity = "0";
                 toSquare.appendChild(fallback);
+                // fade in fallback (simples)
+                // eslint-disable-next-line no-unused-expressions
+                fallback.getBoundingClientRect();
+                requestAnimationFrame(() => {
+                  try {
+                    fallback.style.transition = "opacity 180ms linear";
+                    fallback.style.opacity = "1";
+                  } catch (e) {}
+                });
+                setTimeout(() => {
+                  try {
+                    fallback.style.transition = "";
+                    fallback.style.opacity = "";
+                  } catch (e) {}
+                }, 260);
               } catch (e) {}
             }
           } catch (e) {}

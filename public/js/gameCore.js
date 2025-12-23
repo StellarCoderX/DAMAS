@@ -219,11 +219,23 @@ window.GameCore = (function () {
                 if (moveId && state._lastSoundMoveId === moveId) {
                   // já tocamos o som para esse movimento
                 } else {
-                  if (
-                    Array.isArray(payload.captured) &&
-                    payload.captured.length > 0
-                  )
-                    state.UI.playAudio("capture");
+                  // Determina se foi captura: prefere informação do payload.captured,
+                  // mas se estiver ausente, infere pela distância do movimento.
+                  let isCaptureMove = false;
+                  try {
+                    if (
+                      Array.isArray(payload.captured) &&
+                      payload.captured.length > 0
+                    )
+                      isCaptureMove = true;
+                    else {
+                      const dr = Math.abs(to.row - from.row);
+                      const dc = Math.abs(to.col - from.col);
+                      if (Math.max(dr, dc) > 1) isCaptureMove = true;
+                    }
+                  } catch (e) {}
+
+                  if (isCaptureMove) state.UI.playAudio("capture");
                   else state.UI.playAudio("move");
                   try {
                     if (moveId) state._lastSoundMoveId = moveId;
@@ -301,7 +313,17 @@ window.GameCore = (function () {
       if (!state.isReplaying) break;
 
       await state.UI.animatePieceMove(move.from, move.to, replayBoardSize);
-      state.UI.playAudio("move");
+      // toca som apropriado: captura tem prioridade
+      try {
+        const dr = Math.abs(move.to.row - move.from.row);
+        const dc = Math.abs(move.to.col - move.from.col);
+        const isCapture =
+          (move.captured && move.captured.length > 0) || Math.max(dr, dc) > 1;
+        if (isCapture) state.UI.playAudio("capture");
+        else state.UI.playAudio("move");
+      } catch (e) {
+        state.UI.playAudio("move");
+      }
 
       state.boardState = move.boardState;
       state.UI.renderPieces(state.boardState, replayBoardSize);
@@ -433,15 +455,7 @@ window.GameCore = (function () {
           capturedPos = { row: r, col: c };
           // DEBUG: log quando em modo debug
           try {
-            if (window.__CLIENT_DEBUG)
-              console.log(
-                "[OPTIMISTIC] detected capturedPos",
-                capturedPos,
-                "from",
-                from,
-                "to",
-                to
-              );
+            // debug log removed
           } catch (e) {}
           // Atualiza estado local removendo a peça capturada imediatamente
           try {
@@ -450,13 +464,7 @@ window.GameCore = (function () {
               typeof state.boardState[r][c] !== "undefined"
             ) {
               state.boardState[r][c] = 0;
-              if (window.__CLIENT_DEBUG)
-                console.log(
-                  "[OPTIMISTIC] cleared boardState at",
-                  capturedPos,
-                  "newVal",
-                  state.boardState[r][c]
-                );
+              // debug log removed
             }
           } catch (e) {}
           break;
@@ -508,16 +516,7 @@ window.GameCore = (function () {
     );
 
     try {
-      if (window.__CLIENT_DEBUG) {
-        console.log(
-          "[OPTIMISTIC] after animate, boardState snapshot:",
-          JSON.parse(JSON.stringify(state.boardState))
-        );
-        console.log(
-          "[OPTIMISTIC] currentTurnCapturedPieces:",
-          JSON.parse(JSON.stringify(state.currentTurnCapturedPieces))
-        );
-      }
+      // debug logs removed
     } catch (e) {}
 
     state.UI.renderPieces(state.boardState, state.currentBoardSize);
@@ -695,53 +694,135 @@ window.GameCore = (function () {
         );
         if (capturesForPiece.length > 0) {
           capturesForPiece.sort((a, b) => b.length - a.length);
-          const chosenSeq = capturesForPiece[0];
+          const maxLen = capturesForPiece[0].length;
+          const topSeqs = capturesForPiece.filter((s) => s.length === maxLen);
+          // atraso (ms) entre captures — pode ajustar para feedback visual
+          const CAPTURE_DELAY_MS = 200;
+
           try {
             if (window.__CLIENT_DEBUG)
               console.log(
                 "[SELECT] auto-executing capture sequence for",
                 { row, col },
-                "seq",
-                chosenSeq
+                "topSeqs",
+                topSeqs
               );
           } catch (e) {}
 
-          // Executa cada salto da sequência, aguardando confirmação do servidor
-          let curFrom = { row: chosenSeq[0].row, col: chosenSeq[0].col };
-          for (let i = 1; i < chosenSeq.length; i++) {
-            const dest = chosenSeq[i];
-            const moveId =
-              Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-            try {
-              await performOptimisticMove(curFrom, dest, moveId);
-            } catch (e) {}
-            state.socket.emit("playerMove", {
-              from: { row: curFrom.row, col: curFrom.col },
-              to: dest,
-              room: state.currentRoom,
-              moveId: moveId,
-            });
+          // executor da sequência
+          const executeSeq = async (seq) => {
+            let curFrom = { row: seq[0].row, col: seq[0].col };
+            for (let i = 1; i < seq.length; i++) {
+              const dest = seq[i];
+              const moveId =
+                Date.now().toString(36) +
+                Math.random().toString(36).substr(2, 5);
+              try {
+                await performOptimisticMove(curFrom, dest, moveId);
+              } catch (e) {}
+              state.socket.emit("playerMove", {
+                from: { row: curFrom.row, col: curFrom.col },
+                to: dest,
+                room: state.currentRoom,
+                moveId: moveId,
+              });
 
-            const ok = await waitForMoveAck(moveId, 5000);
+              const ok = await waitForMoveAck(moveId, 5000);
+              try {
+                if (window.__CLIENT_DEBUG)
+                  console.log(
+                    "[SELECT] moveId",
+                    moveId,
+                    "ack",
+                    ok,
+                    "curFrom",
+                    curFrom,
+                    "dest",
+                    dest
+                  );
+              } catch (e) {}
+              if (!ok) break;
+              await new Promise((r) => setTimeout(r, CAPTURE_DELAY_MS));
+              curFrom = { row: dest.row, col: dest.col };
+            }
+          };
+
+          // se houver mais de uma sequência ótima, deixa o usuário escolher
+          if (topSeqs.length > 1) {
             try {
-              if (window.__CLIENT_DEBUG)
-                console.log(
-                  "[SELECT] moveId",
-                  moveId,
-                  "ack",
-                  ok,
-                  "curFrom",
-                  curFrom,
-                  "dest",
-                  dest
+              const boardEl =
+                state.UI && state.UI.elements && state.UI.elements.board
+                  ? state.UI.elements.board
+                  : document.querySelector(".board");
+              const markers = [];
+              topSeqs.forEach((s) => {
+                const last = s[s.length - 1];
+                const sq = document.querySelector(
+                  `.square[data-row="${last.row}"][data-col="${last.col}"]`
                 );
-            } catch (e) {}
-            if (!ok) break;
-            // pequeno delay visual
-            await new Promise((r) => setTimeout(r, 150));
+                if (!sq) return;
+                const marker = document.createElement("div");
+                marker.className = "capture-choice";
+                marker.dataset.row = last.row;
+                marker.dataset.col = last.col;
+                sq.appendChild(marker);
+                // marca o quadrado para facilitar clique em qualquer parte
+                try {
+                  sq.dataset.captureChoice = "true";
+                  sq.dataset.captureChoiceRow = String(last.row);
+                  sq.dataset.captureChoiceCol = String(last.col);
+                } catch (e) {}
+                markers.push(marker);
+              });
 
-            curFrom = { row: dest.row, col: dest.col };
+              const onChoice = async (ev) => {
+                try {
+                  // aceita clique no marcador OU em qualquer parte do quadrado
+                  const markerTarget =
+                    ev.target.closest && ev.target.closest(".capture-choice");
+                  let sqTarget = null;
+                  if (markerTarget)
+                    sqTarget =
+                      markerTarget.closest && markerTarget.closest(".square");
+                  else
+                    sqTarget =
+                      ev.target.closest && ev.target.closest(".square");
+                  if (!sqTarget) return;
+                  if (
+                    !sqTarget.dataset ||
+                    sqTarget.dataset.captureChoice !== "true"
+                  )
+                    return;
+                  const r = parseInt(sqTarget.dataset.captureChoiceRow, 10);
+                  const c = parseInt(sqTarget.dataset.captureChoiceCol, 10);
+                  const chosen = topSeqs.find((s) => {
+                    const last = s[s.length - 1];
+                    return last.row === r && last.col === c;
+                  });
+                  // limpa marcadores e atributos do quadrado
+                  markers.forEach((m) => {
+                    try {
+                      const parent = m.parentNode;
+                      if (m.parentNode) m.parentNode.removeChild(m);
+                      if (parent && parent.dataset) {
+                        delete parent.dataset.captureChoice;
+                        delete parent.dataset.captureChoiceRow;
+                        delete parent.dataset.captureChoiceCol;
+                      }
+                    } catch (e) {}
+                  });
+                  if (boardEl) boardEl.removeEventListener("click", onChoice);
+                  if (chosen) await executeSeq(chosen);
+                } catch (e) {}
+              };
+
+              if (boardEl) boardEl.addEventListener("click", onChoice);
+              return;
+            } catch (e) {}
           }
+
+          // caso único, executa a sequência padrão
+          await executeSeq(topSeqs[0]);
           return;
         }
       }

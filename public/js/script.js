@@ -52,37 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- DEBUG: registrar eventos importantes para envio ao suporte ---
   // Desativado por padrão em produção
   window.__CLIENT_DEBUG = false; // defina true localmente para depuração
-  window.setClientDebug = function (v) {
-    window.__CLIENT_DEBUG = !!v;
-    console.info("Client debug:", window.__CLIENT_DEBUG);
-  };
-  const __debugEvents = [
-    "connect",
-    "disconnect",
-    "updateLobby",
-    "tournamentUpdate",
-    "tournamentStarted",
-    "tournamentMatchReady",
-    "tournamentRoundUpdate",
-    "tournamentMatchEnded",
-    "tournamentTieBreak",
-    "gameStart",
-    "gameStateUpdate",
-    "turnPassedDueToInactivity",
-    "gameOver",
-    "gameDraw",
-    "forceReturnToLobby",
-    "revancheAccepted",
-    "revancheDeclined",
-    "invalidMove",
-  ];
-  __debugEvents.forEach((ev) => {
-    socket.on(ev, (payload) => {
-      try {
-        if (window.__CLIENT_DEBUG) console.log(`[DEBUG socket:${ev}]`, payload);
-      } catch (e) {}
-    });
-  });
+  // debug hooks removed for production; enable `window.__CLIENT_DEBUG = true` manually if needed
 
   // Alerta sonoro quando a partida do usuário (criador) está prestes a iniciar
   socket.on("gameAboutToStart", (data) => {
