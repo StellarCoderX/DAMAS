@@ -261,6 +261,30 @@ window.UI = {
               const list = Array.isArray(capturedPos)
                 ? capturedPos
                 : [capturedPos];
+              // DEBUG: inspeciona DOM antes da remoção
+              try {
+                if (window.__CLIENT_DEBUG) {
+                  list.forEach((p) => {
+                    try {
+                      const sq = document.querySelector(
+                        `.square[data-row="${p.row}"][data-col="${p.col}"]`
+                      );
+                      const count = sq
+                        ? sq.querySelectorAll(".piece").length
+                        : 0;
+                      console.log(
+                        "[ANIM DEBUG] captured square",
+                        p,
+                        "piecesCountBefore",
+                        count,
+                        "elem",
+                        sq
+                      );
+                    } catch (e) {}
+                  });
+                }
+              } catch (e) {}
+
               list.forEach((p) => {
                 try {
                   const sq = document.querySelector(
@@ -268,7 +292,7 @@ window.UI = {
                   );
                   if (sq) {
                     // Remove todas as peças que possam existir nesta casa
-                    const pieces = sq.querySelectorAll(".piece");
+                    const pieces = Array.from(sq.querySelectorAll(".piece"));
                     pieces.forEach((el) => {
                       try {
                         el.remove();
@@ -287,6 +311,30 @@ window.UI = {
                   }
                 } catch (e) {}
               });
+
+              // DEBUG: inspeciona DOM depois da remoção
+              try {
+                if (window.__CLIENT_DEBUG) {
+                  list.forEach((p) => {
+                    try {
+                      const sq = document.querySelector(
+                        `.square[data-row="${p.row}"][data-col="${p.col}"]`
+                      );
+                      const count = sq
+                        ? sq.querySelectorAll(".piece").length
+                        : 0;
+                      console.log(
+                        "[ANIM DEBUG] captured square",
+                        p,
+                        "piecesCountAfter",
+                        count,
+                        "elem",
+                        sq
+                      );
+                    } catch (e) {}
+                  });
+                }
+              } catch (e) {}
             }
 
             // Move elemento diretamente no DOM sem animação. Se não existir
@@ -298,8 +346,52 @@ window.UI = {
                   fromSquare.removeChild(pieceEl);
               } catch (e) {}
               try {
+                // DEBUG: estado do destino antes de anexar
+                try {
+                  if (window.__CLIENT_DEBUG) {
+                    const before = toSquare.querySelectorAll(".piece").length;
+                    console.log(
+                      "[ANIM DEBUG] appending moving piece - dest before",
+                      { from, to },
+                      "count",
+                      before,
+                      "toSquare",
+                      toSquare
+                    );
+                  }
+                } catch (e) {}
+
+                // Remove quaisquer peças remanescentes no destino para evitar overlap
+                try {
+                  const existing = Array.from(
+                    toSquare.querySelectorAll(".piece")
+                  );
+                  existing.forEach((el) => {
+                    try {
+                      el.remove();
+                    } catch (e) {
+                      try {
+                        if (el.parentNode) el.parentNode.removeChild(el);
+                      } catch (er) {
+                        el.style.display = "none";
+                      }
+                    }
+                  });
+                } catch (e) {}
+
                 toSquare.appendChild(pieceEl);
                 pieceEl.style.visibility = "";
+                try {
+                  if (window.__CLIENT_DEBUG) {
+                    const after = toSquare.querySelectorAll(".piece").length;
+                    console.log(
+                      "[ANIM DEBUG] appending moving piece - dest after",
+                      { from, to },
+                      "count",
+                      after
+                    );
+                  }
+                } catch (e) {}
               } catch (e) {
                 // fallback: cria peça no destino
                 try {
