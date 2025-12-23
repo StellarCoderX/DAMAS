@@ -581,11 +581,7 @@ window.UI = {
           if (!square) continue; // Se realmente não existir, pula
 
           const pieceType = boardState[row][col];
-          const existingPiece =
-            square.firstElementChild &&
-            square.firstElementChild.classList.contains("piece")
-              ? square.firstElementChild
-              : null;
+          const existingPiece = square.querySelector(".piece") || null;
 
           if (pieceType !== 0) {
             const isBlack = pieceType.toString().toLowerCase() === "p";
