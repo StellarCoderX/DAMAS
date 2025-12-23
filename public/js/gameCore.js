@@ -1028,6 +1028,69 @@ window.GameCore = (function () {
           );
       } catch (e) {}
 
+      // Fallback: use currentTurnCapturedPieces if we couldn't infer from gameState
+      try {
+        if (!capturedForAnim || capturedForAnim.length === 0) {
+          if (
+            state.currentTurnCapturedPieces &&
+            state.currentTurnCapturedPieces.length > 0
+          ) {
+            capturedForAnim = JSON.parse(
+              JSON.stringify(state.currentTurnCapturedPieces)
+            );
+            try {
+              if (window.__CLIENT_DEBUG)
+                console.log(
+                  "[PROCESS] fallback capturedForAnim from state.currentTurnCapturedPieces",
+                  capturedForAnim
+                );
+            } catch (e) {}
+          }
+        }
+      } catch (e) {}
+
+      // Remove DOM nodes das peças capturadas imediatamente como proteção extra
+      try {
+        if (capturedForAnim && capturedForAnim.length > 0) {
+          capturedForAnim.forEach((p) => {
+            try {
+              const sq = document.querySelector(
+                `.square[data-row="${p.row}"][data-col="${p.col}"]`
+              );
+              if (sq) {
+                const before = sq.querySelectorAll(".piece").length;
+                if (window.__CLIENT_DEBUG)
+                  console.log(
+                    "[PROCESS] removing pieces at",
+                    p,
+                    "count before",
+                    before
+                  );
+                sq.querySelectorAll(".piece").forEach((el) => {
+                  try {
+                    el.remove();
+                  } catch (e) {
+                    try {
+                      if (el.parentNode) el.parentNode.removeChild(el);
+                    } catch (er) {
+                      el.style.display = "none";
+                    }
+                  }
+                });
+                const after = sq.querySelectorAll(".piece").length;
+                if (window.__CLIENT_DEBUG)
+                  console.log(
+                    "[PROCESS] removed pieces at",
+                    p,
+                    "count after",
+                    after
+                  );
+              }
+            } catch (e) {}
+          });
+        }
+      } catch (e) {}
+
       await state.UI.animatePieceMove(
         gameState.lastMove.from,
         gameState.lastMove.to,
